@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0-beta.10
+- Added experimental `SmartPlan` exposure for robotic vacuums through Matter `RvcCleanMode` as an automatic clean mode.
+- Roborock-style fallback control mapping now recognizes `SmartPlan` when the robot exposes it separately through fan speed plus mop companion selects instead of a single clean-mode selector.
+- Switching to `SmartPlan` from Apple Home now propagates the mode to all relevant controls that support it (fan speed, mop intensity and mop mode).
+- Fixed transitions out of `SmartPlan` so vacuum-only and combined modes no longer keep the previous `SmartPlan` value on compatible controls.
+
+## 0.2.0-beta.9
+- Improved the vacuum diagnostics panel in the Web UI so current and selected service areas resolve to human-readable room names from Matter `supportedAreas`.
+- The diagnostics view now shows a useful current-area value even when the main vacuum entity lacks a direct `current_room/current_area` attribute and the effective area is inferred through companion entities such as Roborock `sensor.*habitacion_actual`.
+
 ## 0.2.0-beta.8
 - Added initial experimental `camera` domain exposure in legacy endpoint mapping.
 - Camera entities are now bridged as a Matter-compatible on/off endpoint (`camera.turn_on` / `camera.turn_off`) with identify support.

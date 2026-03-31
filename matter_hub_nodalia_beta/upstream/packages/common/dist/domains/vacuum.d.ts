@@ -83,6 +83,7 @@ export interface VacuumDeviceAttributes {
     matter_service_area_params_key?: unknown;
     matter_service_area_params_nested?: unknown;
     matter_clean_mode_entity?: unknown;
+    matter_clean_mode_auto_option?: unknown;
     matter_clean_mode_vacuum_option?: unknown;
     matter_clean_mode_mop_option?: unknown;
     matter_clean_mode_vacuum_and_mop_option?: unknown;

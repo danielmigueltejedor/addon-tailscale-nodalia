@@ -4756,6 +4756,13 @@ var MOP_MODE_KEYWORDS = [
   "trapear",
   "trapea"
 ];
+var SMART_PLAN_KEYWORDS = [
+  "smartplan",
+  "smart_plan",
+  "intelligent",
+  "inteligente",
+  "plan_inteligente"
+];
 var SEQUENTIAL_KEYWORDS = [
   "then",
   "after",
@@ -4780,7 +4787,11 @@ var CLEAN_MODE_ENTITY_HINTS = [
   "limpieza",
   "mop",
   "mopa",
-  "aspir"
+  "aspir",
+  "smartplan",
+  "smart_plan",
+  "inteligente",
+  "intelligent"
 ];
 var CURRENT_MODE_ATTRIBUTE_KEYS = [
   "cleaning_mode",
@@ -4838,6 +4849,7 @@ function resolveManualOverrideCandidate(attributes4) {
     return void 0;
   }
   const supportedModes = buildSupportedModesFromOptionStrings([
+    toStringValue2(attributes4.matter_clean_mode_auto_option),
     toStringValue2(attributes4.matter_clean_mode_vacuum_and_mop_option),
     toStringValue2(attributes4.matter_clean_mode_vacuum_option),
     toStringValue2(attributes4.matter_clean_mode_mop_option)
@@ -4924,6 +4936,12 @@ function classifyCleanModeValue(value) {
   const normalized = normalizeText(value);
   if (normalized == null) {
     return void 0;
+  }
+  if (containsAnyKeyword(normalized, SMART_PLAN_KEYWORDS)) {
+    return {
+      matterMode: 3 /* Auto */,
+      sequential: false
+    };
   }
   const hasVacuum = containsAnyKeyword(normalized, VACUUM_MODE_KEYWORDS);
   const hasMop = containsAnyKeyword(normalized, MOP_MODE_KEYWORDS);
@@ -5072,8 +5090,18 @@ var MOP_MODE_PREFERENCES = [
   "deep",
   "profundo"
 ];
+var SMART_PLAN_KEYWORDS2 = [
+  "smartplan",
+  "smart_plan",
+  "intelligent",
+  "inteligente",
+  "plan_inteligente"
+];
 function resolveVacuumCurrentModeFromControls(attributes4, companionEntities) {
   const controls = resolveVacuumCleanModeControls(attributes4, companionEntities);
+  if (isSmartPlanModeActive(controls)) {
+    return 3 /* Auto */;
+  }
   const fanEnabled = resolveEnabledState(controls.fan?.current);
   const mopEnabled = resolveEnabledState(controls.mopIntensity?.current);
   if (fanEnabled == null || mopEnabled == null) {
@@ -5090,10 +5118,54 @@ function resolveVacuumCurrentModeFromControls(attributes4, companionEntities) {
   }
   return void 0;
 }
+function resolveVacuumSupportedModesFromControls(attributes4, companionEntities) {
+  const controls = resolveVacuumCleanModeControls(attributes4, companionEntities);
+  const smartPlanControls = collectSmartPlanCapableControls(controls);
+  if (smartPlanControls.length < 2) {
+    return [];
+  }
+  const label = selectSmartPlanOption(smartPlanControls[0]?.options);
+  if (label == null) {
+    return [];
+  }
+  return [
+    {
+      matterMode: 3 /* Auto */,
+      label,
+      option: label,
+      sequential: false
+    }
+  ];
+}
 function buildVacuumCleanModeControlActions(vacuumEntityId, attributes4, companionEntities, newMode) {
   const controls = resolveVacuumCleanModeControls(attributes4, companionEntities);
   const actions = [];
   switch (newMode) {
+    case 3 /* Auto */: {
+      appendAction(
+        actions,
+        createFanSpeedAction(
+          vacuumEntityId,
+          controls.fan,
+          selectSmartPlanOption(controls.fan?.options)
+        )
+      );
+      appendAction(
+        actions,
+        createSelectAction(
+          controls.mopMode?.entityId,
+          selectSmartPlanOption(controls.mopMode?.options)
+        )
+      );
+      appendAction(
+        actions,
+        createSelectAction(
+          controls.mopIntensity?.entityId,
+          selectSmartPlanOption(controls.mopIntensity?.options)
+        )
+      );
+      break;
+    }
     case 2 /* Mop */: {
       appendAction(
         actions,
@@ -5312,7 +5384,7 @@ function selectPreferredOption(options, current, preferences) {
   if (options == null || options.length === 0) {
     return void 0;
   }
-  if (current != null && !isOffOption(current) && options.includes(current)) {
+  if (current != null && !isOffOption(current) && !isSmartPlanOption(current) && options.includes(current)) {
     return current;
   }
   for (const preference of preferences) {
@@ -5331,12 +5403,34 @@ function resolveEnabledState(value) {
   }
   return !isOffOption(value);
 }
+function isSmartPlanModeActive(controls) {
+  const smartPlanControls = collectSmartPlanCapableControls(controls);
+  return smartPlanControls.length >= 2 && smartPlanControls.every((control) => isSmartPlanOption(control.current));
+}
+function collectSmartPlanCapableControls(controls) {
+  return [controls.fan, controls.mopIntensity, controls.mopMode].filter(
+    (control) => control != null && selectSmartPlanOption(control.options) != null
+  );
+}
 function isOffOption(value) {
   const normalized = normalizeText2(value);
   if (normalized == null) {
     return false;
   }
   return OFF_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
+function isSmartPlanOption(value) {
+  const normalized = normalizeText2(value);
+  if (normalized == null) {
+    return false;
+  }
+  return SMART_PLAN_KEYWORDS2.some((keyword) => normalized.includes(keyword));
+}
+function selectSmartPlanOption(options) {
+  if (options == null) {
+    return void 0;
+  }
+  return options.find((option) => isSmartPlanOption(option));
 }
 function appendAction(actions, action) {
   if (action != null) {
@@ -5460,12 +5554,21 @@ function resolveEffectiveVacuumCleanModeData(agent, companions) {
   const relatedEntities = companions ?? collectRelatedCleanModeEntities(agent, entity);
   const attributes4 = entity.state.attributes;
   const resolved = resolveVacuumCleanModeData(entity, relatedEntities) ?? DEFAULT_VACUUM_CLEAN_MODE_DATA;
+  const controlSupportedModes = resolved.entityId == null ? resolveVacuumSupportedModesFromControls(attributes4, relatedEntities) : [];
   const derivedCurrentMode = resolveVacuumCurrentModeFromControls(
     attributes4,
     relatedEntities
   );
-  return derivedCurrentMode == null ? resolved : {
+  const supportedModes = mergeSupportedModes(
+    resolved.supportedModes,
+    controlSupportedModes
+  );
+  return derivedCurrentMode == null ? {
     ...resolved,
+    supportedModes
+  } : {
+    ...resolved,
+    supportedModes,
     currentMode: derivedCurrentMode
   };
 }
@@ -5511,6 +5614,8 @@ function toMatterSupportedModes(options) {
 }
 function buildModeTags(option) {
   switch (option.matterMode) {
+    case 3 /* Auto */:
+      return [{ value: RvcCleanMode.ModeTag.Auto }];
     case 0 /* VacuumAndMop */:
       return option.sequential ? [{ value: RvcCleanMode.ModeTag.VacuumThenMop }] : [
         { value: RvcCleanMode.ModeTag.Vacuum },
@@ -5531,6 +5636,18 @@ function asRecord3(value) {
 }
 function toStringValue4(value) {
   return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function mergeSupportedModes(primaryModes, extraModes) {
+  const merged = [...primaryModes];
+  const seenModes = new Set(primaryModes.map((mode) => mode.matterMode));
+  for (const mode of extraModes) {
+    if (seenModes.has(mode.matterMode)) {
+      continue;
+    }
+    seenModes.add(mode.matterMode);
+    merged.push(mode);
+  }
+  return merged;
 }
 
 // src/matter/behaviors/rvc-run-mode-server.ts

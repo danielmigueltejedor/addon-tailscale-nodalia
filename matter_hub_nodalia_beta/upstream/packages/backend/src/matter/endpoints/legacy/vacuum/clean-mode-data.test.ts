@@ -61,11 +61,32 @@ describe("resolveVacuumCleanModeData", () => {
     ]);
   });
 
+  it("should classify SmartPlan as auto mode", () => {
+    const data = resolveVacuumCleanModeData(createVacuumEntity(), [
+      {
+        entityId: "select.roborock_qrevo_s_modo_de_limpieza",
+        friendlyName: "Modo de limpieza",
+        state: "SmartPlan",
+        options: ["SmartPlan", "Aspirar y fregar", "Solo aspirar", "Solo fregar"],
+      },
+    ]);
+
+    expect(data?.entityId).toBe("select.roborock_qrevo_s_modo_de_limpieza");
+    expect(data?.currentMode).toBe(VacuumMatterCleanMode.Auto);
+    expect(data?.supportedModes.map((mode) => mode.matterMode)).toEqual([
+      VacuumMatterCleanMode.Auto,
+      VacuumMatterCleanMode.VacuumAndMop,
+      VacuumMatterCleanMode.Vacuum,
+      VacuumMatterCleanMode.Mop,
+    ]);
+  });
+
   it("should honor manual clean-mode overrides when provided", () => {
     const data = resolveVacuumCleanModeData(
       createVacuumEntity({
         cleaning_mode: "Solo aspirar",
         matter_clean_mode_entity: "select.mi_robot_modo_de_limpieza",
+        matter_clean_mode_auto_option: "SmartPlan",
         matter_clean_mode_vacuum_and_mop_option: "Aspirar y fregar",
         matter_clean_mode_vacuum_option: "Solo aspirar",
         matter_clean_mode_mop_option: "Solo fregar",
@@ -75,6 +96,7 @@ describe("resolveVacuumCleanModeData", () => {
     expect(data?.entityId).toBe("select.mi_robot_modo_de_limpieza");
     expect(data?.currentMode).toBe(VacuumMatterCleanMode.Vacuum);
     expect(data?.supportedModes.map((mode) => mode.option)).toEqual([
+      "SmartPlan",
       "Aspirar y fregar",
       "Solo aspirar",
       "Solo fregar",

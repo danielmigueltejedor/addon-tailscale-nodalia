@@ -7,6 +7,7 @@ export enum VacuumMatterCleanMode {
   VacuumAndMop = 0,
   Vacuum = 1,
   Mop = 2,
+  Auto = 3,
 }
 
 export interface VacuumCleanModeOption {
@@ -51,6 +52,14 @@ const MOP_MODE_KEYWORDS = [
   "trapea",
 ] as const;
 
+const SMART_PLAN_KEYWORDS = [
+  "smartplan",
+  "smart_plan",
+  "intelligent",
+  "inteligente",
+  "plan_inteligente",
+] as const;
+
 const SEQUENTIAL_KEYWORDS = [
   "then",
   "after",
@@ -77,6 +86,10 @@ const CLEAN_MODE_ENTITY_HINTS = [
   "mop",
   "mopa",
   "aspir",
+  "smartplan",
+  "smart_plan",
+  "inteligente",
+  "intelligent",
 ] as const;
 
 const CURRENT_MODE_ATTRIBUTE_KEYS = [
@@ -152,6 +165,7 @@ function resolveManualOverrideCandidate(
   }
 
   const supportedModes = buildSupportedModesFromOptionStrings([
+    toStringValue(attributes.matter_clean_mode_auto_option),
     toStringValue(attributes.matter_clean_mode_vacuum_and_mop_option),
     toStringValue(attributes.matter_clean_mode_vacuum_option),
     toStringValue(attributes.matter_clean_mode_mop_option),
@@ -272,6 +286,13 @@ function classifyCleanModeValue(
   const normalized = normalizeText(value);
   if (normalized == null) {
     return undefined;
+  }
+
+  if (containsAnyKeyword(normalized, SMART_PLAN_KEYWORDS)) {
+    return {
+      matterMode: VacuumMatterCleanMode.Auto,
+      sequential: false,
+    };
   }
 
   const hasVacuum = containsAnyKeyword(normalized, VACUUM_MODE_KEYWORDS);

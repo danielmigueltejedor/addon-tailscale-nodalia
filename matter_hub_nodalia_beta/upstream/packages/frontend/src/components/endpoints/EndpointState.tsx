@@ -135,12 +135,26 @@ function getVacuumDiagnostics(
     attributes.status_text,
     attributes.state_text,
   );
+  const supportedAreas = Array.isArray(serviceArea.supportedAreas)
+    ? serviceArea.supportedAreas
+    : [];
+  const currentAreaMatterLabel = resolveServiceAreaAreaLabel(
+    serviceArea.currentArea,
+    supportedAreas,
+  );
+  const selectedAreasMatterLabels = resolveServiceAreaAreaLabels(
+    serviceArea.selectedAreas,
+    supportedAreas,
+  );
+  const currentAreaDisplay = firstDefined(currentAreaHa, currentAreaMatterLabel);
 
   return {
     "Entidad HA": entity.entity_id ?? "-",
     "Estado HA": entityState.state ?? "-",
     "Estado detallado HA": detailedStatusHa ?? "-",
-    "Área actual HA": currentAreaHa ?? "-",
+    "Área actual": currentAreaDisplay ?? "-",
+    "Área actual HA (raw)": currentAreaHa ?? "-",
+    "Área actual Matter (resuelta)": currentAreaMatterLabel ?? "-",
     "Áreas seleccionadas HA": selectedAreasHa ?? "-",
     "Acción ServiceArea HA": attributes.matter_service_area_action ?? "-",
     "Comando ServiceArea HA":
@@ -150,6 +164,7 @@ function getVacuumDiagnostics(
       "-",
     "ParamsKey ServiceArea HA": attributes.matter_service_area_params_key ?? "-",
     "currentArea Matter": serviceArea.currentArea ?? null,
+    "selectedAreas Matter (resueltas)": selectedAreasMatterLabels,
     "selectedAreas Matter": serviceArea.selectedAreas ?? [],
     "progress Matter": serviceArea.progress ?? [],
     "Estado operacional Matter":
@@ -175,6 +190,81 @@ function firstDefined(...values: unknown[]): unknown {
     }
   }
   return undefined;
+}
+
+function resolveServiceAreaAreaLabels(
+  value: unknown,
+  supportedAreas: unknown[],
+): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((areaId) => resolveServiceAreaAreaLabel(areaId, supportedAreas))
+    .filter((label): label is string => label != null);
+}
+
+function resolveServiceAreaAreaLabel(
+  value: unknown,
+  supportedAreas: unknown[],
+): string | undefined {
+  const areaId = toNumberLike(value);
+  if (areaId == null) {
+    return undefined;
+  }
+
+  const supportedArea = supportedAreas.find((entry) => {
+    const area = asRecord(entry);
+    return toNumberLike(area.areaId) === areaId;
+  });
+
+  if (supportedArea == null) {
+    return `#${areaId}`;
+  }
+
+  const area = asRecord(supportedArea);
+  const areaInfo = asRecord(area.areaInfo);
+  const locationInfo = asRecord(areaInfo.locationInfo);
+  const locationName = toStringLike(locationInfo.locationName);
+
+  return locationName ? `${locationName} (#${areaId})` : `#${areaId}`;
+}
+
+function toNumberLike(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return undefined;
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  if (value != null && typeof value === "object") {
+    const record = asRecord(value);
+    return (
+      toNumberLike(record.areaId) ??
+      toNumberLike(record.area_id) ??
+      toNumberLike(record.id)
+    );
+  }
+
+  return undefined;
+}
+
+function toStringLike(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 const ObjectTable = <T extends object>(props: {

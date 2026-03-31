@@ -14,6 +14,7 @@ import {
 import {
   buildVacuumCleanModeControlActions,
   resolveVacuumCurrentModeFromControls,
+  resolveVacuumSupportedModesFromControls,
 } from "../clean-mode-controls.js";
 
 const DEFAULT_VACUUM_CLEAN_MODE_DATA: VacuumCleanModeData = {
@@ -105,16 +106,28 @@ function resolveEffectiveVacuumCleanModeData(
   const resolved =
     resolveVacuumCleanModeData(entity, relatedEntities) ??
     DEFAULT_VACUUM_CLEAN_MODE_DATA;
+  const controlSupportedModes =
+    resolved.entityId == null
+      ? resolveVacuumSupportedModesFromControls(attributes, relatedEntities)
+      : [];
   const derivedCurrentMode = resolveVacuumCurrentModeFromControls(
     attributes,
     relatedEntities,
   );
+  const supportedModes = mergeSupportedModes(
+    resolved.supportedModes,
+    controlSupportedModes,
+  );
 
   return (
     derivedCurrentMode == null
-      ? resolved
+      ? {
+          ...resolved,
+          supportedModes,
+        }
       : {
           ...resolved,
+          supportedModes,
           currentMode: derivedCurrentMode,
         }
   );
@@ -183,6 +196,8 @@ function buildModeTags(
   option: VacuumCleanModeOption,
 ): RvcCleanMode.ModeTagStruct[] {
   switch (option.matterMode) {
+    case VacuumMatterCleanMode.Auto:
+      return [{ value: RvcCleanMode.ModeTag.Auto }];
     case VacuumMatterCleanMode.VacuumAndMop:
       return option.sequential
         ? [{ value: RvcCleanMode.ModeTag.VacuumThenMop }]
@@ -207,4 +222,23 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function toStringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function mergeSupportedModes(
+  primaryModes: VacuumCleanModeOption[],
+  extraModes: VacuumCleanModeOption[],
+): VacuumCleanModeOption[] {
+  const merged = [...primaryModes];
+  const seenModes = new Set(primaryModes.map((mode) => mode.matterMode));
+
+  for (const mode of extraModes) {
+    if (seenModes.has(mode.matterMode)) {
+      continue;
+    }
+
+    seenModes.add(mode.matterMode);
+    merged.push(mode);
+  }
+
+  return merged;
 }
