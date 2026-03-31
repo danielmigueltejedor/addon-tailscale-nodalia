@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0-beta.3
+## 0.2.0-beta.4
 - Added initial experimental `camera` domain exposure in legacy endpoint mapping.
 - Camera entities are now bridged as a Matter-compatible on/off endpoint (`camera.turn_on` / `camera.turn_off`) with identify support.
 - This is a compatibility-first bridge path while native Matter camera streaming support is still pending in the underlying Matter stack.

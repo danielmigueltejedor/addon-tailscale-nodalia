@@ -30,7 +30,8 @@ export function VacuumDevice(
     return undefined;
   }
 
-  const attributes = homeAssistantEntity.entity.state.attributes;
+  const attributes = homeAssistantEntity.entity.state
+    .attributes as VacuumDeviceAttributes & Record<string, unknown>;
   const supportedFeatures = attributes.supported_features ?? 0;
   let device = VacuumEndpointType.set({ homeAssistantEntity });
 
@@ -49,9 +50,7 @@ export function VacuumDevice(
     device = device.with(VacuumRvcCleanModeServer);
   }
 
-  const serviceAreaData = parseVacuumServiceAreaData(
-    attributes as VacuumDeviceAttributes & Record<string, unknown>,
-  );
+  const serviceAreaData = parseVacuumServiceAreaData(attributes);
   const VacuumServiceAreaServer = createVacuumServiceAreaServer();
   if (serviceAreaData != null && VacuumServiceAreaServer != null) {
     device = device.with(VacuumServiceAreaServer as never);
