@@ -5109,7 +5109,7 @@ function buildVacuumCleanModeControlActions(vacuumEntityId, attributes4, compani
           controls.mopIntensity?.entityId,
           selectPreferredOption(
             controls.mopIntensity?.options,
-            controls.mopIntensity?.current,
+            void 0,
             MOP_INTENSITY_PREFERENCES
           )
         )
@@ -5153,12 +5153,13 @@ function buildVacuumCleanModeControlActions(vacuumEntityId, attributes4, compani
     default: {
       appendAction(
         actions,
-        createSelectAction(
-          controls.mopIntensity?.entityId,
+        createFanSpeedAction(
+          vacuumEntityId,
+          controls.fan,
           selectPreferredOption(
-            controls.mopIntensity?.options,
-            controls.mopIntensity?.current,
-            MOP_INTENSITY_PREFERENCES
+            controls.fan?.options,
+            void 0,
+            FAN_COMBINED_PREFERENCES
           )
         )
       );
@@ -5175,13 +5176,12 @@ function buildVacuumCleanModeControlActions(vacuumEntityId, attributes4, compani
       );
       appendAction(
         actions,
-        createFanSpeedAction(
-          vacuumEntityId,
-          controls.fan,
+        createSelectAction(
+          controls.mopIntensity?.entityId,
           selectPreferredOption(
-            controls.fan?.options,
-            controls.fan?.current,
-            FAN_COMBINED_PREFERENCES
+            controls.mopIntensity?.options,
+            void 0,
+            MOP_INTENSITY_PREFERENCES
           )
         )
       );

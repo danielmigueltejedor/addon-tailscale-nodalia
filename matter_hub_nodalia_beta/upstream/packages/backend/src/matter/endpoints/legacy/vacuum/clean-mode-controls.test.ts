@@ -92,9 +92,9 @@ describe("clean-mode-controls", () => {
       ),
     ).toEqual([
       {
-        action: "select.select_option",
-        entityId: "select.roborock_qrevo_s_intensidad_de_la_mopa",
-        data: { option: "Medio" },
+        action: "vacuum.set_fan_speed",
+        entityId: "vacuum.roborock_qrevo_s",
+        data: { fan_speed: "Medio" },
       },
       {
         action: "select.select_option",
@@ -102,9 +102,9 @@ describe("clean-mode-controls", () => {
         data: { option: "Estandar" },
       },
       {
-        action: "vacuum.set_fan_speed",
-        entityId: "vacuum.roborock_qrevo_s",
-        data: { fan_speed: "Medio" },
+        action: "select.select_option",
+        entityId: "select.roborock_qrevo_s_intensidad_de_la_mopa",
+        data: { option: "Medio" },
       },
     ]);
   });
