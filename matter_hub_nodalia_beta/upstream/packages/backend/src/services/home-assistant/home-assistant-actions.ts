@@ -9,6 +9,7 @@ import type { HomeAssistantClient } from "./home-assistant-client.js";
 export interface HomeAssistantAction {
   action: string;
   data?: object | undefined;
+  entityId?: string | undefined;
 }
 
 interface HomeAssistantActionCall extends HomeAssistantAction {
@@ -62,8 +63,13 @@ export class HomeAssistantActions extends Service {
   }
 
   call(action: HomeAssistantAction, entityId: string) {
-    const key = `${entityId}-${action.action}`;
-    this.debounceContext.get(key, 100)({ ...action, entityId });
+    const resolvedEntityId = action.entityId ?? entityId;
+    const key = `${resolvedEntityId}-${action.action}`;
+    this.debounceContext.get(key, 100)({
+      action: action.action,
+      data: action.data,
+      entityId: resolvedEntityId,
+    });
   }
 
   async callAction<T = void>(

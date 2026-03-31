@@ -8,6 +8,7 @@ import { testBit } from "../../../../utils/test-bit.js";
 import { BasicInformationServer } from "../../../behaviors/basic-information-server.js";
 import { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
 import { VacuumIdentifyServer } from "./behaviors/vacuum-identify-server.js";
+import { VacuumRvcCleanModeServer } from "./behaviors/vacuum-rvc-clean-mode-server.js";
 import { VacuumOnOffServer } from "./behaviors/vacuum-on-off-server.js";
 import { VacuumRvcOperationalStateServer } from "./behaviors/vacuum-rvc-operational-state-server.js";
 import { VacuumRvcRunModeServer } from "./behaviors/vacuum-rvc-run-mode-server.js";
@@ -32,6 +33,21 @@ export function VacuumDevice(
   const attributes = homeAssistantEntity.entity.state.attributes;
   const supportedFeatures = attributes.supported_features ?? 0;
   let device = VacuumEndpointType.set({ homeAssistantEntity });
+
+  const supportsCleanMode =
+    testBit(supportedFeatures, VacuumDeviceFeature.SEND_COMMAND) ||
+    attributes.cleaning_mode != null ||
+    attributes.cleaning_mode_list != null ||
+    attributes.clean_mode != null ||
+    attributes.clean_mode_list != null ||
+    attributes.mop_mode != null ||
+    attributes.mop_mode_list != null ||
+    attributes.vacuum_mode != null ||
+    attributes.vacuum_mode_list != null ||
+    attributes.matter_clean_mode_entity != null;
+  if (supportsCleanMode) {
+    device = device.with(VacuumRvcCleanModeServer);
+  }
 
   const serviceAreaData = parseVacuumServiceAreaData(
     attributes as VacuumDeviceAttributes & Record<string, unknown>,

@@ -48,6 +48,14 @@ export interface VacuumDeviceAttributes {
   battery_level?: number | string | null | undefined;
   fan_speed?: VacuumFanSpeed | string | null | undefined;
   fan_speed_list?: string[];
+  cleaning_mode?: string | null | undefined;
+  cleaning_mode_list?: string[] | null | undefined;
+  clean_mode?: string | null | undefined;
+  clean_mode_list?: string[] | null | undefined;
+  mop_mode?: string | null | undefined;
+  mop_mode_list?: string[] | null | undefined;
+  vacuum_mode?: string | null | undefined;
+  vacuum_mode_list?: string[] | null | undefined;
   status?: string | null | undefined;
   // Optional room/segment metadata used for Matter Service Area mapping.
   rooms?: unknown;
@@ -78,4 +86,8 @@ export interface VacuumDeviceAttributes {
   matter_service_area_command_key?: unknown;
   matter_service_area_params_key?: unknown;
   matter_service_area_params_nested?: unknown;
+  matter_clean_mode_entity?: unknown;
+  matter_clean_mode_vacuum_option?: unknown;
+  matter_clean_mode_mop_option?: unknown;
+  matter_clean_mode_vacuum_and_mop_option?: unknown;
 }

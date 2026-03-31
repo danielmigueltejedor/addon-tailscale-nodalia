@@ -8,6 +8,7 @@ export * from "./media-input.js";
 export * from "./occupancy-sensing.js";
 export * from "./on-off.js";
 export * from "./relative-humidity-measurement.js";
+export * from "./rvc-clean-mode.js";
 export * from "./rvc-operational-state.js";
 export * from "./rvc-run-mode.js";
 export * from "./service-area.js";
@@ -37,6 +38,7 @@ export enum ClusterId {
   thermostat = "thermostat",
   windowCovering = "windowCovering",
   mediaInput = "mediaInput",
+  rvcCleanMode = "rvcCleanMode",
   rvcRunMode = "rvcRunMode",
   rvcOperationalState = "rvcOperationalState",
   serviceArea = "serviceArea",
