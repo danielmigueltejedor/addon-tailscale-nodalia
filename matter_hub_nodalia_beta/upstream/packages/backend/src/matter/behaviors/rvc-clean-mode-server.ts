@@ -11,7 +11,7 @@ import type { ValueGetter } from "./utils/cluster-config.js";
 type OptionalActionSetter<T> = (
   value: T,
   agent: Agent,
-) => HomeAssistantAction | undefined;
+) => HomeAssistantAction | readonly HomeAssistantAction[] | undefined;
 
 export interface RvcCleanModeServerConfig {
   getCurrentMode: ValueGetter<number>;

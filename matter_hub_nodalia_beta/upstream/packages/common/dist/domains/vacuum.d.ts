@@ -1,0 +1,89 @@
+export declare enum VacuumState {
+    cleaning = "cleaning",
+    docked = "docked",
+    returning = "returning",
+    error = "error",
+    idle = "idle",
+    paused = "paused"
+}
+export declare enum VacuumDeviceFeature {
+    /**
+     * @deprecated
+     */
+    TURN_ON = 1,
+    /**
+     * @deprecated
+     */
+    TURN_OFF = 2,
+    PAUSE = 4,
+    STOP = 8,
+    RETURN_HOME = 16,
+    FAN_SPEED = 32,
+    BATTERY = 64,
+    /**
+     * @deprecated
+     */
+    STATUS = 128,
+    SEND_COMMAND = 256,
+    LOCATE = 512,
+    CLEAN_SPOT = 1024,
+    MAP = 2048,
+    STATE = 4096,
+    START = 8192
+}
+export declare enum VacuumFanSpeed {
+    off = "off",
+    low = "low",
+    medium = "medium",
+    high = "high",
+    turbo = "turbo",
+    auto = "auto",
+    max = "max"
+}
+export interface VacuumDeviceAttributes {
+    supported_features?: number;
+    battery_level?: number | string | null | undefined;
+    fan_speed?: VacuumFanSpeed | string | null | undefined;
+    fan_speed_list?: string[];
+    cleaning_mode?: string | null | undefined;
+    cleaning_mode_list?: string[] | null | undefined;
+    clean_mode?: string | null | undefined;
+    clean_mode_list?: string[] | null | undefined;
+    mop_mode?: string | null | undefined;
+    mop_mode_list?: string[] | null | undefined;
+    vacuum_mode?: string | null | undefined;
+    vacuum_mode_list?: string[] | null | undefined;
+    status?: string | null | undefined;
+    rooms?: unknown;
+    room_ids?: unknown;
+    room_names?: unknown;
+    segments?: unknown;
+    segment_ids?: unknown;
+    segment_names?: unknown;
+    room_mapping?: unknown;
+    room_map?: unknown;
+    segment_map?: unknown;
+    selected_map?: unknown;
+    map_id?: unknown;
+    selected_segments?: unknown;
+    cleaning_segments?: unknown;
+    active_segments?: unknown;
+    current_segments?: unknown;
+    selected_rooms?: unknown;
+    current_rooms?: unknown;
+    selected_areas?: unknown;
+    active_areas?: unknown;
+    current_segment?: unknown;
+    current_area?: unknown;
+    room_clean_command?: unknown;
+    segment_clean_command?: unknown;
+    matter_service_area_action?: unknown;
+    matter_service_area_command?: unknown;
+    matter_service_area_command_key?: unknown;
+    matter_service_area_params_key?: unknown;
+    matter_service_area_params_nested?: unknown;
+    matter_clean_mode_entity?: unknown;
+    matter_clean_mode_vacuum_option?: unknown;
+    matter_clean_mode_mop_option?: unknown;
+    matter_clean_mode_vacuum_and_mop_option?: unknown;
+}

@@ -34,9 +34,10 @@ export class HomeAssistantEntityBehavior extends Behavior {
     );
   }
 
-  callAction(action: HomeAssistantAction) {
+  callAction(action: HomeAssistantAction | readonly HomeAssistantAction[]) {
     const actions = this.env.get(HomeAssistantActions);
-    actions.call(action, this.entityId);
+    const actionList = Array.isArray(action) ? [...action] : [action];
+    actionList.forEach((entry) => actions.call(entry, this.entityId));
   }
 }
 

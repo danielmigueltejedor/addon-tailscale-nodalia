@@ -11,6 +11,10 @@ import {
   type VacuumCleanModeOption,
   VacuumMatterCleanMode,
 } from "../clean-mode-data.js";
+import {
+  buildVacuumCleanModeControlActions,
+  resolveVacuumCurrentModeFromControls,
+} from "../clean-mode-controls.js";
 
 const DEFAULT_VACUUM_CLEAN_MODE_DATA: VacuumCleanModeData = {
   currentMode: VacuumMatterCleanMode.VacuumAndMop,
@@ -47,13 +51,9 @@ export const VacuumRvcCleanModeServer = RvcCleanModeServer({
     );
   },
   changeToMode: (newMode, agent) => {
-    const data = resolveEffectiveVacuumCleanModeData(agent);
-    if (data.entityId == null) {
-      console.debug(
-        `VacuumCleanMode has no actionable companion select for mode ${newMode}`,
-      );
-      return undefined;
-    }
+    const entity = agent.get(HomeAssistantEntityBehavior).entity;
+    const companions = collectRelatedCleanModeEntities(agent, entity);
+    const data = resolveEffectiveVacuumCleanModeData(agent, companions);
 
     const selectedMode = data.supportedModes.find(
       (mode) => mode.matterMode === newMode,
@@ -62,22 +62,61 @@ export const VacuumRvcCleanModeServer = RvcCleanModeServer({
       return undefined;
     }
 
-    console.debug(
-      `VacuumCleanMode selecting option ${JSON.stringify(selectedMode.option)} on ${data.entityId}`,
+    if (data.entityId != null) {
+      console.debug(
+        `VacuumCleanMode selecting option ${JSON.stringify(selectedMode.option)} on ${data.entityId}`,
+      );
+      return {
+        action: "select.select_option",
+        entityId: data.entityId,
+        data: { option: selectedMode.option },
+      };
+    }
+
+    const attributes = entity.state.attributes as Record<string, unknown>;
+    const controlActions = buildVacuumCleanModeControlActions(
+      entity.entity_id,
+      attributes,
+      companions,
+      newMode as VacuumMatterCleanMode,
     );
-    return {
-      action: "select.select_option",
-      entityId: data.entityId,
-      data: { option: selectedMode.option },
-    };
+    if (controlActions != null) {
+      console.debug(
+        `VacuumCleanMode derived ${controlActions.length} Home Assistant action(s) for mode ${newMode}`,
+      );
+      return controlActions;
+    }
+
+    console.debug(
+      `VacuumCleanMode has no actionable companion controls for mode ${newMode}`,
+    );
+    return undefined;
   },
 });
 
-function resolveEffectiveVacuumCleanModeData(agent: Agent): VacuumCleanModeData {
+function resolveEffectiveVacuumCleanModeData(
+  agent: Agent,
+  companions?: VacuumCleanModeCompanionEntity[],
+): VacuumCleanModeData {
   const entity = agent.get(HomeAssistantEntityBehavior).entity;
+  const relatedEntities =
+    companions ?? collectRelatedCleanModeEntities(agent, entity);
+  const attributes = entity.state.attributes as Record<string, unknown>;
+  const resolved =
+    resolveVacuumCleanModeData(entity, relatedEntities) ??
+    DEFAULT_VACUUM_CLEAN_MODE_DATA;
+  const derivedCurrentMode = resolveVacuumCurrentModeFromControls(
+    attributes,
+    relatedEntities,
+  );
+
   return (
-    resolveVacuumCleanModeData(entity, collectRelatedCleanModeEntities(agent, entity)) ??
-    DEFAULT_VACUUM_CLEAN_MODE_DATA
+    derivedCurrentMode == null
+      ? resolved
+      : {
+          ...resolved,
+          currentMode: derivedCurrentMode,
+        }
   );
 }
 
