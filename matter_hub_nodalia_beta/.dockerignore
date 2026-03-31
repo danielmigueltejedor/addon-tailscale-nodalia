@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+dist
+*.log
+*.tsbuildinfo
+
+upstream/node_modules
+upstream/apps/*/node_modules
+upstream/packages/*/node_modules
+upstream/apps/*/dist
+upstream/packages/*/dist
+upstream/packages/frontend/*.tsbuildinfo
+upstream/packages/backend/*.tsbuildinfo

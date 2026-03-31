@@ -12,6 +12,7 @@ COPY upstream/ ./
 COPY README.md ./README.md
 RUN [ -f LICENSE ] || printf "Apache-2.0\n" > LICENSE
 ENV APP_VERSION=${BUILD_VERSION}
+ENV CI=true
 
 RUN pnpm install --frozen-lockfile \
   && pnpm --filter './packages/*' run build \

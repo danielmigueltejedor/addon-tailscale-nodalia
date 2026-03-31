@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0-beta.5
+## 0.2.0-beta.6
 - Added initial experimental `camera` domain exposure in legacy endpoint mapping.
 - Camera entities are now bridged as a Matter-compatible on/off endpoint (`camera.turn_on` / `camera.turn_off`) with identify support.
 - This is a compatibility-first bridge path while native Matter camera streaming support is still pending in the underlying Matter stack.
@@ -9,6 +9,8 @@
 - Added optional advanced clean-mode override attributes (`matter_clean_mode_entity`, `matter_clean_mode_vacuum_option`, `matter_clean_mode_mop_option`, `matter_clean_mode_vacuum_and_mop_option`) for integrations that need explicit mapping.
 - Added a Roborock-friendly fallback path for `RvcCleanMode` when no single clean-mode selector exists, deriving changes from fan speed plus mop-intensity/mop-mode companion entities.
 - Fixed Apple Home clean-mode changes failing with an error popup on Roborock setups that expose mode indirectly through fan speed plus mop companion entities.
+- Fixed Docker addon builds aborting on `pnpm install` in non-interactive environments by setting `CI=true`.
+- Added a `.dockerignore` to keep local `node_modules`, `dist`, logs and tsbuildinfo files out of the addon build context.
 
 ## 0.2.0-beta.1
 - Added a new vacuum diagnostics panel in the Web UI endpoint view, showing key HA and Matter fields for room-cleaning troubleshooting (`currentArea`, `selectedAreas`, `progress`, run state and ServiceArea action config).
