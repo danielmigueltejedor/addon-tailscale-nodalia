@@ -43,7 +43,7 @@ const DEFAULT_VACUUM_CLEAN_MODE_DATA: VacuumCleanModeData = {
 export const VacuumRvcCleanModeServer = RvcCleanModeServer({
   getCurrentMode: (_, agent) => {
     const data = resolveEffectiveVacuumCleanModeData(agent);
-    return data.currentMode ?? data.supportedModes[0]?.matterMode ?? 0;
+    return data.currentMode;
   },
   getSupportedModes: (_, agent) => {
     return toMatterSupportedModes(

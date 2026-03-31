@@ -4685,12 +4685,17 @@ var RvcCleanModeServerBase = class extends Base17 {
     await super.initialize();
   }
   update(entity) {
+    const supportedModes = this.state.config.getSupportedModes(
+      entity.state,
+      this.agent
+    );
+    const resolvedCurrentMode = this.state.config.getCurrentMode(
+      entity.state,
+      this.agent
+    );
     applyPatchState(this.state, {
-      currentMode: this.state.config.getCurrentMode(entity.state, this.agent),
-      supportedModes: this.state.config.getSupportedModes(
-        entity.state,
-        this.agent
-      )
+      currentMode: resolvedCurrentMode ?? this.state.currentMode ?? supportedModes[0]?.mode ?? 0,
+      supportedModes
     });
   }
   changeToMode(request) {
@@ -4824,7 +4829,7 @@ function resolveVacuumCleanModeData(entity, companionEntities = []) {
   return {
     entityId: bestCandidate.entityId,
     supportedModes: bestCandidate.supportedModes,
-    currentMode: bestCandidate.currentMode ?? currentModeFromPrimary ?? bestCandidate.supportedModes[0]?.matterMode
+    currentMode: bestCandidate.currentMode ?? currentModeFromPrimary
   };
 }
 function resolveManualOverrideCandidate(attributes4) {
@@ -5404,7 +5409,7 @@ var DEFAULT_VACUUM_CLEAN_MODE_DATA = {
 var VacuumRvcCleanModeServer = RvcCleanModeServer({
   getCurrentMode: (_, agent) => {
     const data = resolveEffectiveVacuumCleanModeData(agent);
-    return data.currentMode ?? data.supportedModes[0]?.matterMode ?? 0;
+    return data.currentMode;
   },
   getSupportedModes: (_, agent) => {
     return toMatterSupportedModes(

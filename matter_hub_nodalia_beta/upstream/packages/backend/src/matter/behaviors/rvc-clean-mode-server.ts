@@ -14,7 +14,7 @@ type OptionalActionSetter<T> = (
 ) => HomeAssistantAction | readonly HomeAssistantAction[] | undefined;
 
 export interface RvcCleanModeServerConfig {
-  getCurrentMode: ValueGetter<number>;
+  getCurrentMode: ValueGetter<number | undefined>;
   getSupportedModes: ValueGetter<RvcCleanMode.ModeOption[]>;
   changeToMode: OptionalActionSetter<number>;
 }
@@ -31,12 +31,22 @@ class RvcCleanModeServerBase extends Base {
   }
 
   private update(entity: HomeAssistantEntityInformation) {
+    const supportedModes = this.state.config.getSupportedModes(
+      entity.state,
+      this.agent,
+    );
+    const resolvedCurrentMode = this.state.config.getCurrentMode(
+      entity.state,
+      this.agent,
+    );
+
     applyPatchState(this.state, {
-      currentMode: this.state.config.getCurrentMode(entity.state, this.agent),
-      supportedModes: this.state.config.getSupportedModes(
-        entity.state,
-        this.agent,
-      ),
+      currentMode:
+        resolvedCurrentMode ??
+        this.state.currentMode ??
+        supportedModes[0]?.mode ??
+        0,
+      supportedModes,
     });
   }
 

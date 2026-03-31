@@ -80,6 +80,20 @@ describe("resolveVacuumCleanModeData", () => {
       "Solo fregar",
     ]);
   });
+
+  it("should not force the first mode when the current companion state is ambiguous", () => {
+    const data = resolveVacuumCleanModeData(createVacuumEntity(), [
+      {
+        entityId: "select.roborock_qrevo_s_intensidad_de_la_mopa",
+        friendlyName: "Intensidad de la mopa",
+        state: "Medio",
+        options: ["Apagada", "Media", "Alta"],
+      },
+    ]);
+
+    expect(data?.entityId).toBeUndefined();
+    expect(data?.currentMode).toBeUndefined();
+  });
 });
 
 function createVacuumEntity(

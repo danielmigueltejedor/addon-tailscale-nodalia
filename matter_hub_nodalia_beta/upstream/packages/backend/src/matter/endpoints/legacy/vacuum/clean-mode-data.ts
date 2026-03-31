@@ -139,10 +139,7 @@ export function resolveVacuumCleanModeData(
   return {
     entityId: bestCandidate.entityId,
     supportedModes: bestCandidate.supportedModes,
-    currentMode:
-      bestCandidate.currentMode ??
-      currentModeFromPrimary ??
-      bestCandidate.supportedModes[0]?.matterMode,
+    currentMode: bestCandidate.currentMode ?? currentModeFromPrimary,
   };
 }
 
