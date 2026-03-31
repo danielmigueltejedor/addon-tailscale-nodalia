@@ -5099,7 +5099,7 @@ var SMART_PLAN_KEYWORDS2 = [
 ];
 function resolveVacuumCurrentModeFromControls(attributes4, companionEntities) {
   const controls = resolveVacuumCleanModeControls(attributes4, companionEntities);
-  if (isSmartPlanModeActive(controls)) {
+  if (isSmartPlanModeActive(attributes4, controls, companionEntities)) {
     return 3 /* Auto */;
   }
   const fanEnabled = resolveEnabledState(controls.fan?.current);
@@ -5119,8 +5119,10 @@ function resolveVacuumCurrentModeFromControls(attributes4, companionEntities) {
   return void 0;
 }
 function resolveVacuumSupportedModesFromControls(attributes4, companionEntities) {
-  const controls = resolveVacuumCleanModeControls(attributes4, companionEntities);
-  const smartPlanControls = collectSmartPlanCapableControls(controls);
+  const smartPlanControls = collectSmartPlanCapableControls(
+    attributes4,
+    companionEntities
+  );
   if (smartPlanControls.length < 2) {
     return [];
   }
@@ -5142,28 +5144,11 @@ function buildVacuumCleanModeControlActions(vacuumEntityId, attributes4, compani
   const actions = [];
   switch (newMode) {
     case 3 /* Auto */: {
-      appendAction(
-        actions,
-        createFanSpeedAction(
-          vacuumEntityId,
-          controls.fan,
-          selectSmartPlanOption(controls.fan?.options)
-        )
-      );
-      appendAction(
-        actions,
-        createSelectAction(
-          controls.mopMode?.entityId,
-          selectSmartPlanOption(controls.mopMode?.options)
-        )
-      );
-      appendAction(
-        actions,
-        createSelectAction(
-          controls.mopIntensity?.entityId,
-          selectSmartPlanOption(controls.mopIntensity?.options)
-        )
-      );
+      appendActions(actions, buildSmartPlanControlActions(
+        vacuumEntityId,
+        attributes4,
+        companionEntities
+      ));
       break;
     }
     case 2 /* Mop */: {
@@ -5403,14 +5388,59 @@ function resolveEnabledState(value) {
   }
   return !isOffOption(value);
 }
-function isSmartPlanModeActive(controls) {
-  const smartPlanControls = collectSmartPlanCapableControls(controls);
+function isSmartPlanModeActive(attributes4, controls, companionEntities) {
+  const smartPlanControls = collectSmartPlanCapableControls(
+    attributes4,
+    companionEntities,
+    controls
+  );
   return smartPlanControls.length >= 2 && smartPlanControls.every((control) => isSmartPlanOption(control.current));
 }
-function collectSmartPlanCapableControls(controls) {
-  return [controls.fan, controls.mopIntensity, controls.mopMode].filter(
-    (control) => control != null && selectSmartPlanOption(control.options) != null
+function collectSmartPlanCapableControls(attributes4, companionEntities, controls = resolveVacuumCleanModeControls(attributes4, companionEntities)) {
+  const smartPlanControls = [];
+  const seenEntityIds = /* @__PURE__ */ new Set();
+  if (controls.fan != null && selectSmartPlanOption(controls.fan.options) != null) {
+    smartPlanControls.push(controls.fan);
+    seenEntityIds.add(controls.fan.entityId);
+  }
+  for (const companion of companionEntities) {
+    const options = toStringArray2(companion.options);
+    if (options.length < 2 || selectSmartPlanOption(options) == null) {
+      continue;
+    }
+    if (seenEntityIds.has(companion.entityId)) {
+      continue;
+    }
+    smartPlanControls.push({
+      entityId: companion.entityId,
+      current: companion.state,
+      options
+    });
+    seenEntityIds.add(companion.entityId);
+  }
+  return smartPlanControls;
+}
+function buildSmartPlanControlActions(vacuumEntityId, attributes4, companionEntities) {
+  const controls = resolveVacuumCleanModeControls(attributes4, companionEntities);
+  const actions = [];
+  appendAction(
+    actions,
+    createFanSpeedAction(
+      vacuumEntityId,
+      controls.fan,
+      selectSmartPlanOption(controls.fan?.options)
+    )
   );
+  for (const companion of companionEntities) {
+    appendAction(
+      actions,
+      createSelectAction(
+        companion.entityId,
+        selectSmartPlanOption(toStringArray2(companion.options))
+      )
+    );
+  }
+  return dedupeActions(actions);
 }
 function isOffOption(value) {
   const normalized = normalizeText2(value);
@@ -5436,6 +5466,9 @@ function appendAction(actions, action) {
   if (action != null) {
     actions.push(action);
   }
+}
+function appendActions(actions, extraActions) {
+  actions.push(...extraActions);
 }
 function dedupeActions(actions) {
   const seen = /* @__PURE__ */ new Set();

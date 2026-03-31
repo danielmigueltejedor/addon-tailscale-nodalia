@@ -186,12 +186,12 @@ describe("clean-mode-controls", () => {
       },
       {
         action: "select.select_option",
-        entityId: "select.roborock_qrevo_s_modo_mopa",
+        entityId: "select.roborock_qrevo_s_intensidad_de_la_mopa",
         data: { option: "SmartPlan" },
       },
       {
         action: "select.select_option",
-        entityId: "select.roborock_qrevo_s_intensidad_de_la_mopa",
+        entityId: "select.roborock_qrevo_s_modo_mopa",
         data: { option: "SmartPlan" },
       },
     ]);

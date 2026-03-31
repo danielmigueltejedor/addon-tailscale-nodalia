@@ -142,7 +142,7 @@ export function resolveVacuumCurrentModeFromControls(
   companionEntities: VacuumCleanModeCompanionEntity[],
 ): VacuumMatterCleanMode | undefined {
   const controls = resolveVacuumCleanModeControls(attributes, companionEntities);
-  if (isSmartPlanModeActive(controls)) {
+  if (isSmartPlanModeActive(attributes, controls, companionEntities)) {
     return VacuumMatterCleanMode.Auto;
   }
 
@@ -170,8 +170,10 @@ export function resolveVacuumSupportedModesFromControls(
   attributes: VacuumDeviceAttributes & Record<string, unknown>,
   companionEntities: VacuumCleanModeCompanionEntity[],
 ): VacuumCleanModeOption[] {
-  const controls = resolveVacuumCleanModeControls(attributes, companionEntities);
-  const smartPlanControls = collectSmartPlanCapableControls(controls);
+  const smartPlanControls = collectSmartPlanCapableControls(
+    attributes,
+    companionEntities,
+  );
   if (smartPlanControls.length < 2) {
     return [];
   }
@@ -202,28 +204,11 @@ export function buildVacuumCleanModeControlActions(
 
   switch (newMode) {
     case VacuumMatterCleanMode.Auto: {
-      appendAction(
-        actions,
-        createFanSpeedAction(
-          vacuumEntityId,
-          controls.fan,
-          selectSmartPlanOption(controls.fan?.options),
-        ),
-      );
-      appendAction(
-        actions,
-        createSelectAction(
-          controls.mopMode?.entityId,
-          selectSmartPlanOption(controls.mopMode?.options),
-        ),
-      );
-      appendAction(
-        actions,
-        createSelectAction(
-          controls.mopIntensity?.entityId,
-          selectSmartPlanOption(controls.mopIntensity?.options),
-        ),
-      );
+      appendActions(actions, buildSmartPlanControlActions(
+        vacuumEntityId,
+        attributes,
+        companionEntities,
+      ));
       break;
     }
     case VacuumMatterCleanMode.Mop: {
@@ -542,8 +527,16 @@ function resolveEnabledState(value: string | undefined): boolean | undefined {
   return !isOffOption(value);
 }
 
-function isSmartPlanModeActive(controls: VacuumCleanModeControls): boolean {
-  const smartPlanControls = collectSmartPlanCapableControls(controls);
+function isSmartPlanModeActive(
+  attributes: VacuumDeviceAttributes & Record<string, unknown>,
+  controls: VacuumCleanModeControls,
+  companionEntities: VacuumCleanModeCompanionEntity[],
+): boolean {
+  const smartPlanControls = collectSmartPlanCapableControls(
+    attributes,
+    companionEntities,
+    controls,
+  );
   return (
     smartPlanControls.length >= 2 &&
     smartPlanControls.every((control) => isSmartPlanOption(control.current))
@@ -551,12 +544,70 @@ function isSmartPlanModeActive(controls: VacuumCleanModeControls): boolean {
 }
 
 function collectSmartPlanCapableControls(
-  controls: VacuumCleanModeControls,
+  attributes: VacuumDeviceAttributes & Record<string, unknown>,
+  companionEntities: VacuumCleanModeCompanionEntity[],
+  controls = resolveVacuumCleanModeControls(attributes, companionEntities),
 ): Array<SelectCompanionControl | VacuumFanControl> {
-  return [controls.fan, controls.mopIntensity, controls.mopMode].filter(
-    (control): control is SelectCompanionControl | VacuumFanControl =>
-      control != null && selectSmartPlanOption(control.options) != null,
+  const smartPlanControls: Array<SelectCompanionControl | VacuumFanControl> = [];
+  const seenEntityIds = new Set<string>();
+
+  if (
+    controls.fan != null &&
+    selectSmartPlanOption(controls.fan.options) != null
+  ) {
+    smartPlanControls.push(controls.fan);
+    seenEntityIds.add(controls.fan.entityId);
+  }
+
+  for (const companion of companionEntities) {
+    const options = toStringArray(companion.options);
+    if (options.length < 2 || selectSmartPlanOption(options) == null) {
+      continue;
+    }
+
+    if (seenEntityIds.has(companion.entityId)) {
+      continue;
+    }
+
+    smartPlanControls.push({
+      entityId: companion.entityId,
+      current: companion.state,
+      options,
+    });
+    seenEntityIds.add(companion.entityId);
+  }
+
+  return smartPlanControls;
+}
+
+function buildSmartPlanControlActions(
+  vacuumEntityId: string,
+  attributes: VacuumDeviceAttributes & Record<string, unknown>,
+  companionEntities: VacuumCleanModeCompanionEntity[],
+): HomeAssistantAction[] {
+  const controls = resolveVacuumCleanModeControls(attributes, companionEntities);
+  const actions: HomeAssistantAction[] = [];
+
+  appendAction(
+    actions,
+    createFanSpeedAction(
+      vacuumEntityId,
+      controls.fan,
+      selectSmartPlanOption(controls.fan?.options),
+    ),
   );
+
+  for (const companion of companionEntities) {
+    appendAction(
+      actions,
+      createSelectAction(
+        companion.entityId,
+        selectSmartPlanOption(toStringArray(companion.options)),
+      ),
+    );
+  }
+
+  return dedupeActions(actions);
 }
 
 function isOffOption(value: string): boolean {
@@ -592,6 +643,13 @@ function appendAction(
   if (action != null) {
     actions.push(action);
   }
+}
+
+function appendActions(
+  actions: HomeAssistantAction[],
+  extraActions: readonly HomeAssistantAction[],
+): void {
+  actions.push(...extraActions);
 }
 
 function dedupeActions(actions: HomeAssistantAction[]): HomeAssistantAction[] {

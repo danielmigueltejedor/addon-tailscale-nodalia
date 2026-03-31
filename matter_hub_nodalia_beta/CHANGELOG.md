@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0-beta.11
+- Broadened Roborock `SmartPlan` detection so Matter now exposes it when the robot represents the mode across multiple same-device `select.*` entities plus fan speed, instead of relying only on a narrow set of preferred controls.
+- Switching to `SmartPlan` now forwards the option to every same-device companion select that supports it, improving compatibility with models where the automatic plan must be applied to several controls at once.
+
 ## 0.2.0-beta.10
 - Added experimental `SmartPlan` exposure for robotic vacuums through Matter `RvcCleanMode` as an automatic clean mode.
 - Roborock-style fallback control mapping now recognizes `SmartPlan` when the robot exposes it separately through fan speed plus mop companion selects instead of a single clean-mode selector.
