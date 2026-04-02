@@ -539,10 +539,7 @@ function isSmartPlanModeActive(
     companionEntities,
     controls,
   );
-  return (
-    smartPlanControls.length >= 2 &&
-    smartPlanControls.every((control) => isSmartPlanOption(control.current))
-  );
+  return smartPlanControls.some((control) => isSmartPlanOption(control.current));
 }
 
 function collectSmartPlanCapableControls(

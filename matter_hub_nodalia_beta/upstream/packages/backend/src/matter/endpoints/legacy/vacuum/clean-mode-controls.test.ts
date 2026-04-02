@@ -278,4 +278,32 @@ describe("clean-mode-controls", () => {
       ),
     ).toBe(VacuumMatterCleanMode.Auto);
   });
+
+  it("should keep auto mode active during partial smart_mode transitions", () => {
+    const partialSmartModeAttributes = {
+      fan_speed: "smart_mode",
+      fan_speed_list: ["quiet", "balanced", "off", "smart_mode"],
+    };
+    const partialSmartModeCompanions: VacuumCleanModeCompanionEntity[] = [
+      {
+        entityId: "select.roborock_qrevo_s_intensidad_de_la_mopa",
+        friendlyName: "Intensidad de la mopa",
+        state: "medium",
+        options: ["off", "medium", "smart_mode"],
+      },
+      {
+        entityId: "select.roborock_qrevo_s_modo_mopa",
+        friendlyName: "Modo mopa",
+        state: "standard",
+        options: ["standard", "deep", "smart_mode"],
+      },
+    ];
+
+    expect(
+      resolveVacuumCurrentModeFromControls(
+        partialSmartModeAttributes,
+        partialSmartModeCompanions,
+      ),
+    ).toBe(VacuumMatterCleanMode.Auto);
+  });
 });

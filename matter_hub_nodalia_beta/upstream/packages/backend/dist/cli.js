@@ -5413,7 +5413,7 @@ function isSmartPlanModeActive(attributes4, controls, companionEntities) {
     companionEntities,
     controls
   );
-  return smartPlanControls.length >= 2 && smartPlanControls.every((control) => isSmartPlanOption(control.current));
+  return smartPlanControls.some((control) => isSmartPlanOption(control.current));
 }
 function collectSmartPlanCapableControls(attributes4, companionEntities, controls = resolveVacuumCleanModeControls(attributes4, companionEntities)) {
   const smartPlanControls = [];

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0-beta.14
+- Improved Roborock `Auto/SmartPlan` state stability in Matter clean-mode updates by treating the mode as active as soon as any compatible same-device control reports `smart_mode` / `SmartPlan`, instead of waiting for every related control to synchronize.
+- This reduces Apple Home dropping the automatic mode immediately after selection while Home Assistant companion entities are still converging.
+
 ## 0.2.0-beta.13
 - Fixed mixed Roborock clean-mode exposure where a primary selector only offered `Vacuum`, `Mop` and `Vacuum & Mop` while `Auto/SmartPlan` was derived from fan speed and companion selects.
 - Matter `RvcCleanMode` now keeps `Auto` in `supportedModes` in that scenario instead of dropping it after mode changes.
