@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0-beta.12
+- Added explicit Roborock `smart_mode` / `smartmode` alias support for Matter vacuum clean-mode detection and fallback control mapping.
+- This allows the automatic clean mode to be exposed even when the robot reports it through values such as `smart_mode` in `fan_speed_list` and same-device companion selects instead of `SmartPlan`.
+
 ## 0.2.0-beta.11
 - Broadened Roborock `SmartPlan` detection so Matter now exposes it when the robot represents the mode across multiple same-device `select.*` entities plus fan speed, instead of relying only on a narrow set of preferred controls.
 - Switching to `SmartPlan` now forwards the option to every same-device companion select that supports it, improving compatibility with models where the automatic plan must be applied to several controls at once.

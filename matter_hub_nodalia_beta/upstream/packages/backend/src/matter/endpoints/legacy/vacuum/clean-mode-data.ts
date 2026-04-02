@@ -54,7 +54,9 @@ const MOP_MODE_KEYWORDS = [
 
 const SMART_PLAN_KEYWORDS = [
   "smartplan",
+  "smartmode",
   "smart_plan",
+  "smart_mode",
   "intelligent",
   "inteligente",
   "plan_inteligente",
@@ -87,7 +89,9 @@ const CLEAN_MODE_ENTITY_HINTS = [
   "mopa",
   "aspir",
   "smartplan",
+  "smartmode",
   "smart_plan",
+  "smart_mode",
   "inteligente",
   "intelligent",
 ] as const;

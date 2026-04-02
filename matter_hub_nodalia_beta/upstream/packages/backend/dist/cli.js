@@ -4758,7 +4758,9 @@ var MOP_MODE_KEYWORDS = [
 ];
 var SMART_PLAN_KEYWORDS = [
   "smartplan",
+  "smartmode",
   "smart_plan",
+  "smart_mode",
   "intelligent",
   "inteligente",
   "plan_inteligente"
@@ -4789,7 +4791,9 @@ var CLEAN_MODE_ENTITY_HINTS = [
   "mopa",
   "aspir",
   "smartplan",
+  "smartmode",
   "smart_plan",
+  "smart_mode",
   "inteligente",
   "intelligent"
 ];
@@ -5092,7 +5096,9 @@ var MOP_MODE_PREFERENCES = [
 ];
 var SMART_PLAN_KEYWORDS2 = [
   "smartplan",
+  "smartmode",
   "smart_plan",
+  "smart_mode",
   "intelligent",
   "inteligente",
   "plan_inteligente"

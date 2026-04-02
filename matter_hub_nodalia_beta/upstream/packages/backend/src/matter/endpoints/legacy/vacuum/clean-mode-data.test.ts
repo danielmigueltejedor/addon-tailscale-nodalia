@@ -81,6 +81,25 @@ describe("resolveVacuumCleanModeData", () => {
     ]);
   });
 
+  it("should classify smart_mode as auto mode", () => {
+    const data = resolveVacuumCleanModeData(createVacuumEntity(), [
+      {
+        entityId: "select.roborock_qrevo_s_cleaning_mode",
+        friendlyName: "Cleaning mode",
+        state: "smart_mode",
+        options: ["smart_mode", "vacuum_mop", "vacuum", "mop"],
+      },
+    ]);
+
+    expect(data?.currentMode).toBe(VacuumMatterCleanMode.Auto);
+    expect(data?.supportedModes.map((mode) => mode.matterMode)).toEqual([
+      VacuumMatterCleanMode.Auto,
+      VacuumMatterCleanMode.VacuumAndMop,
+      VacuumMatterCleanMode.Vacuum,
+      VacuumMatterCleanMode.Mop,
+    ]);
+  });
+
   it("should honor manual clean-mode overrides when provided", () => {
     const data = resolveVacuumCleanModeData(
       createVacuumEntity({

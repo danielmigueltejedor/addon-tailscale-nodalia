@@ -131,7 +131,9 @@ const MOP_MODE_PREFERENCES = [
 
 const SMART_PLAN_KEYWORDS = [
   "smartplan",
+  "smartmode",
   "smart_plan",
+  "smart_mode",
   "intelligent",
   "inteligente",
   "plan_inteligente",
