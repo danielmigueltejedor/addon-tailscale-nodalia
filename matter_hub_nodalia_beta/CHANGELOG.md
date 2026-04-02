@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-beta.13
+- Fixed mixed Roborock clean-mode exposure where a primary selector only offered `Vacuum`, `Mop` and `Vacuum & Mop` while `Auto/SmartPlan` was derived from fan speed and companion selects.
+- Matter `RvcCleanMode` now keeps `Auto` in `supportedModes` in that scenario instead of dropping it after mode changes.
+- Mode changes now route per-mode actions to the correct source: direct selector-backed modes still use their dedicated `select`, while derived `Auto/SmartPlan` continues to use the multi-control fallback path.
+
 ## 0.2.0-beta.12
 - Added explicit Roborock `smart_mode` / `smartmode` alias support for Matter vacuum clean-mode detection and fallback control mapping.
 - This allows the automatic clean mode to be exposed even when the robot reports it through values such as `smart_mode` in `fan_speed_list` and same-device companion selects instead of `SmartPlan`.

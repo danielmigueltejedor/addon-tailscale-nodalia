@@ -21,6 +21,7 @@ export interface VacuumCleanModeData {
   currentMode?: VacuumMatterCleanMode;
   supportedModes: VacuumCleanModeOption[];
   entityId?: string;
+  actionEntityIds?: Partial<Record<VacuumMatterCleanMode, string>>;
 }
 
 export interface VacuumCleanModeCompanionEntity {
@@ -155,6 +156,7 @@ export function resolveVacuumCleanModeData(
 
   return {
     entityId: bestCandidate.entityId,
+    actionEntityIds: bestCandidate.actionEntityIds,
     supportedModes: bestCandidate.supportedModes,
     currentMode: bestCandidate.currentMode ?? currentModeFromPrimary,
   };
@@ -180,6 +182,7 @@ function resolveManualOverrideCandidate(
 
   return {
     entityId,
+    actionEntityIds: createActionEntityIds(supportedModes, entityId),
     supportedModes,
     currentMode: resolveCurrentModeFromAttributes(attributes),
     score: 1000,
@@ -197,6 +200,7 @@ function resolvePrimaryAttributeCandidate(
   }
 
   return {
+    actionEntityIds: undefined,
     supportedModes,
     currentMode: resolveCurrentModeFromAttributes(attributes),
     score: supportedModes.length * 100,
@@ -221,6 +225,7 @@ function resolveCompanionCandidate(
 
   return {
     entityId: companion.entityId,
+    actionEntityIds: createActionEntityIds(supportedModes, companion.entityId),
     supportedModes,
     currentMode: resolveCurrentModeFromValue(companion.state, supportedModes),
     score: 250 + supportedModes.length * 100 + hintScore,
@@ -282,6 +287,19 @@ function buildSupportedModesFromOptionStrings(
   }
 
   return supportedModes;
+}
+
+function createActionEntityIds(
+  supportedModes: VacuumCleanModeOption[],
+  entityId: string,
+): Partial<Record<VacuumMatterCleanMode, string>> {
+  return supportedModes.reduce<Partial<Record<VacuumMatterCleanMode, string>>>(
+    (result, mode) => {
+      result[mode.matterMode] = entityId;
+      return result;
+    },
+    {},
+  );
 }
 
 function classifyCleanModeValue(

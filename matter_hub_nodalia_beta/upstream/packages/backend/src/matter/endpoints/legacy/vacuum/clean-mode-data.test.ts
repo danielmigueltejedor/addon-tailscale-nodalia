@@ -18,6 +18,13 @@ describe("resolveVacuumCleanModeData", () => {
 
     expect(data).toEqual({
       entityId: "select.roborock_qrevo_s_cleaning_mode",
+      actionEntityIds: {
+        [VacuumMatterCleanMode.VacuumAndMop]:
+          "select.roborock_qrevo_s_cleaning_mode",
+        [VacuumMatterCleanMode.Vacuum]:
+          "select.roborock_qrevo_s_cleaning_mode",
+        [VacuumMatterCleanMode.Mop]: "select.roborock_qrevo_s_cleaning_mode",
+      },
       currentMode: VacuumMatterCleanMode.Vacuum,
       supportedModes: [
         {
@@ -53,6 +60,13 @@ describe("resolveVacuumCleanModeData", () => {
     ]);
 
     expect(data?.entityId).toBe("select.roborock_qrevo_s_modo_de_limpieza");
+    expect(data?.actionEntityIds).toEqual({
+      [VacuumMatterCleanMode.VacuumAndMop]:
+        "select.roborock_qrevo_s_modo_de_limpieza",
+      [VacuumMatterCleanMode.Vacuum]:
+        "select.roborock_qrevo_s_modo_de_limpieza",
+      [VacuumMatterCleanMode.Mop]: "select.roborock_qrevo_s_modo_de_limpieza",
+    });
     expect(data?.currentMode).toBe(VacuumMatterCleanMode.Mop);
     expect(data?.supportedModes.map((mode) => mode.matterMode)).toEqual([
       VacuumMatterCleanMode.VacuumAndMop,
@@ -72,6 +86,14 @@ describe("resolveVacuumCleanModeData", () => {
     ]);
 
     expect(data?.entityId).toBe("select.roborock_qrevo_s_modo_de_limpieza");
+    expect(data?.actionEntityIds).toEqual({
+      [VacuumMatterCleanMode.Auto]: "select.roborock_qrevo_s_modo_de_limpieza",
+      [VacuumMatterCleanMode.VacuumAndMop]:
+        "select.roborock_qrevo_s_modo_de_limpieza",
+      [VacuumMatterCleanMode.Vacuum]:
+        "select.roborock_qrevo_s_modo_de_limpieza",
+      [VacuumMatterCleanMode.Mop]: "select.roborock_qrevo_s_modo_de_limpieza",
+    });
     expect(data?.currentMode).toBe(VacuumMatterCleanMode.Auto);
     expect(data?.supportedModes.map((mode) => mode.matterMode)).toEqual([
       VacuumMatterCleanMode.Auto,
@@ -92,6 +114,14 @@ describe("resolveVacuumCleanModeData", () => {
     ]);
 
     expect(data?.currentMode).toBe(VacuumMatterCleanMode.Auto);
+    expect(data?.actionEntityIds).toEqual({
+      [VacuumMatterCleanMode.Auto]: "select.roborock_qrevo_s_cleaning_mode",
+      [VacuumMatterCleanMode.VacuumAndMop]:
+        "select.roborock_qrevo_s_cleaning_mode",
+      [VacuumMatterCleanMode.Vacuum]:
+        "select.roborock_qrevo_s_cleaning_mode",
+      [VacuumMatterCleanMode.Mop]: "select.roborock_qrevo_s_cleaning_mode",
+    });
     expect(data?.supportedModes.map((mode) => mode.matterMode)).toEqual([
       VacuumMatterCleanMode.Auto,
       VacuumMatterCleanMode.VacuumAndMop,
@@ -113,6 +143,13 @@ describe("resolveVacuumCleanModeData", () => {
     );
 
     expect(data?.entityId).toBe("select.mi_robot_modo_de_limpieza");
+    expect(data?.actionEntityIds).toEqual({
+      [VacuumMatterCleanMode.Auto]: "select.mi_robot_modo_de_limpieza",
+      [VacuumMatterCleanMode.VacuumAndMop]:
+        "select.mi_robot_modo_de_limpieza",
+      [VacuumMatterCleanMode.Vacuum]: "select.mi_robot_modo_de_limpieza",
+      [VacuumMatterCleanMode.Mop]: "select.mi_robot_modo_de_limpieza",
+    });
     expect(data?.currentMode).toBe(VacuumMatterCleanMode.Vacuum);
     expect(data?.supportedModes.map((mode) => mode.option)).toEqual([
       "SmartPlan",

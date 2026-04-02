@@ -4843,6 +4843,7 @@ function resolveVacuumCleanModeData(entity, companionEntities = []) {
   });
   return {
     entityId: bestCandidate.entityId,
+    actionEntityIds: bestCandidate.actionEntityIds,
     supportedModes: bestCandidate.supportedModes,
     currentMode: bestCandidate.currentMode ?? currentModeFromPrimary
   };
@@ -4863,6 +4864,7 @@ function resolveManualOverrideCandidate(attributes4) {
   }
   return {
     entityId,
+    actionEntityIds: createActionEntityIds(supportedModes, entityId),
     supportedModes,
     currentMode: resolveCurrentModeFromAttributes(attributes4),
     score: 1e3
@@ -4876,6 +4878,7 @@ function resolvePrimaryAttributeCandidate(attributes4) {
     return void 0;
   }
   return {
+    actionEntityIds: void 0,
     supportedModes,
     currentMode: resolveCurrentModeFromAttributes(attributes4),
     score: supportedModes.length * 100
@@ -4893,6 +4896,7 @@ function resolveCompanionCandidate(companion) {
   }, 0);
   return {
     entityId: companion.entityId,
+    actionEntityIds: createActionEntityIds(supportedModes, companion.entityId),
     supportedModes,
     currentMode: resolveCurrentModeFromValue(companion.state, supportedModes),
     score: 250 + supportedModes.length * 100 + hintScore
@@ -4935,6 +4939,15 @@ function buildSupportedModesFromOptionStrings(values4) {
     seenModes.add(classification.matterMode);
   }
   return supportedModes;
+}
+function createActionEntityIds(supportedModes, entityId) {
+  return supportedModes.reduce(
+    (result, mode) => {
+      result[mode.matterMode] = entityId;
+      return result;
+    },
+    {}
+  );
 }
 function classifyCleanModeValue(value) {
   const normalized = normalizeText(value);
@@ -5559,13 +5572,14 @@ var VacuumRvcCleanModeServer = RvcCleanModeServer({
     if (selectedMode == null) {
       return void 0;
     }
-    if (data.entityId != null) {
+    const actionEntityId = data.actionEntityIds?.[newMode];
+    if (actionEntityId != null) {
       console.debug(
-        `VacuumCleanMode selecting option ${JSON.stringify(selectedMode.option)} on ${data.entityId}`
+        `VacuumCleanMode selecting option ${JSON.stringify(selectedMode.option)} on ${actionEntityId}`
       );
       return {
         action: "select.select_option",
-        entityId: data.entityId,
+        entityId: actionEntityId,
         data: { option: selectedMode.option }
       };
     }
@@ -5591,9 +5605,15 @@ var VacuumRvcCleanModeServer = RvcCleanModeServer({
 function resolveEffectiveVacuumCleanModeData(agent, companions) {
   const entity = agent.get(HomeAssistantEntityBehavior).entity;
   const relatedEntities = companions ?? collectRelatedCleanModeEntities(agent, entity);
+  return resolveEffectiveVacuumCleanModeDataForEntity(entity, relatedEntities);
+}
+function resolveEffectiveVacuumCleanModeDataForEntity(entity, relatedEntities) {
   const attributes4 = entity.state.attributes;
   const resolved = resolveVacuumCleanModeData(entity, relatedEntities) ?? DEFAULT_VACUUM_CLEAN_MODE_DATA;
-  const controlSupportedModes = resolved.entityId == null ? resolveVacuumSupportedModesFromControls(attributes4, relatedEntities) : [];
+  const controlSupportedModes = resolveVacuumSupportedModesFromControls(
+    attributes4,
+    relatedEntities
+  );
   const derivedCurrentMode = resolveVacuumCurrentModeFromControls(
     attributes4,
     relatedEntities

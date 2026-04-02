@@ -63,13 +63,14 @@ export const VacuumRvcCleanModeServer = RvcCleanModeServer({
       return undefined;
     }
 
-    if (data.entityId != null) {
+    const actionEntityId = data.actionEntityIds?.[newMode as VacuumMatterCleanMode];
+    if (actionEntityId != null) {
       console.debug(
-        `VacuumCleanMode selecting option ${JSON.stringify(selectedMode.option)} on ${data.entityId}`,
+        `VacuumCleanMode selecting option ${JSON.stringify(selectedMode.option)} on ${actionEntityId}`,
       );
       return {
         action: "select.select_option",
-        entityId: data.entityId,
+        entityId: actionEntityId,
         data: { option: selectedMode.option },
       };
     }
@@ -102,14 +103,21 @@ function resolveEffectiveVacuumCleanModeData(
   const entity = agent.get(HomeAssistantEntityBehavior).entity;
   const relatedEntities =
     companions ?? collectRelatedCleanModeEntities(agent, entity);
+  return resolveEffectiveVacuumCleanModeDataForEntity(entity, relatedEntities);
+}
+
+export function resolveEffectiveVacuumCleanModeDataForEntity(
+  entity: HomeAssistantEntityInformation,
+  relatedEntities: VacuumCleanModeCompanionEntity[],
+): VacuumCleanModeData {
   const attributes = entity.state.attributes as Record<string, unknown>;
   const resolved =
     resolveVacuumCleanModeData(entity, relatedEntities) ??
     DEFAULT_VACUUM_CLEAN_MODE_DATA;
-  const controlSupportedModes =
-    resolved.entityId == null
-      ? resolveVacuumSupportedModesFromControls(attributes, relatedEntities)
-      : [];
+  const controlSupportedModes = resolveVacuumSupportedModesFromControls(
+    attributes,
+    relatedEntities,
+  );
   const derivedCurrentMode = resolveVacuumCurrentModeFromControls(
     attributes,
     relatedEntities,
