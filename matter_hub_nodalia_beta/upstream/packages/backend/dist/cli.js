@@ -4932,13 +4932,22 @@ function buildSupportedModesFromOptionStrings(values4) {
     }
     supportedModes.push({
       matterMode: classification.matterMode,
-      label: option,
+      label: buildCleanModeLabel(option, classification.matterMode),
       option,
       sequential: classification.sequential
     });
     seenModes.add(classification.matterMode);
   }
   return supportedModes;
+}
+function buildCleanModeLabel(option, matterMode) {
+  if (matterMode === 3 /* Auto */) {
+    const normalized = normalizeText(option);
+    if (normalized === "smart_mode" || normalized === "smartmode" || normalized === "smart_plan" || normalized === "smartplan") {
+      return "SmartPlan";
+    }
+  }
+  return option;
 }
 function createActionEntityIds(supportedModes, entityId) {
   return supportedModes.reduce(
@@ -5152,7 +5161,7 @@ function resolveVacuumSupportedModesFromControls(attributes4, companionEntities)
   return [
     {
       matterMode: 3 /* Auto */,
-      label,
+      label: buildAutoModeLabel(label),
       option: label,
       sequential: false
     }
@@ -5481,6 +5490,13 @@ function selectSmartPlanOption(options) {
   }
   return options.find((option) => isSmartPlanOption(option));
 }
+function buildAutoModeLabel(option) {
+  const normalized = normalizeText2(option);
+  if (normalized === "smart_mode" || normalized === "smartmode" || normalized === "smart_plan" || normalized === "smartplan") {
+    return "SmartPlan";
+  }
+  return option;
+}
 function appendAction(actions, action) {
   if (action != null) {
     actions.push(action);
@@ -5674,7 +5690,7 @@ function toMatterSupportedModes(options) {
 function buildModeTags(option) {
   switch (option.matterMode) {
     case 3 /* Auto */:
-      return [{ value: RvcCleanMode.ModeTag.Auto }];
+      return isRegularSmartPlanMode(option) ? [{ value: RvcCleanMode.ModeTag.VacuumThenMop }] : [{ value: RvcCleanMode.ModeTag.Auto }];
     case 0 /* VacuumAndMop */:
       return option.sequential ? [{ value: RvcCleanMode.ModeTag.VacuumThenMop }] : [
         { value: RvcCleanMode.ModeTag.Vacuum },
@@ -5707,6 +5723,18 @@ function mergeSupportedModes(primaryModes, extraModes) {
     merged.push(mode);
   }
   return merged;
+}
+function isRegularSmartPlanMode(option) {
+  const normalizedLabel = normalizeText3(option.label);
+  const normalizedOption = normalizeText3(option.option);
+  return normalizedLabel === "smartplan" || normalizedLabel === "smart_plan" || normalizedOption === "smart_mode" || normalizedOption === "smartmode" || normalizedOption === "smart_plan" || normalizedOption === "smartplan";
+}
+function normalizeText3(value) {
+  if (typeof value !== "string") {
+    return void 0;
+  }
+  const normalized = value.normalize("NFD").replace(new RegExp("\\p{Diacritic}+", "gu"), "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return normalized.length > 0 ? normalized : void 0;
 }
 
 // src/matter/behaviors/rvc-run-mode-server.ts

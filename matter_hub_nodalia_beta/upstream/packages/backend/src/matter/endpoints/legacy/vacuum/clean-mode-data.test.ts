@@ -114,6 +114,8 @@ describe("resolveVacuumCleanModeData", () => {
     ]);
 
     expect(data?.currentMode).toBe(VacuumMatterCleanMode.Auto);
+    expect(data?.supportedModes[0]?.label).toBe("SmartPlan");
+    expect(data?.supportedModes[0]?.option).toBe("smart_mode");
     expect(data?.actionEntityIds).toEqual({
       [VacuumMatterCleanMode.Auto]: "select.roborock_qrevo_s_cleaning_mode",
       [VacuumMatterCleanMode.VacuumAndMop]:

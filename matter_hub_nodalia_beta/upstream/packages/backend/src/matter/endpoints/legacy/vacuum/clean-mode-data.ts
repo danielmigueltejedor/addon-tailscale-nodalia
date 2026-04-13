@@ -279,7 +279,7 @@ function buildSupportedModesFromOptionStrings(
 
     supportedModes.push({
       matterMode: classification.matterMode,
-      label: option,
+      label: buildCleanModeLabel(option, classification.matterMode),
       option,
       sequential: classification.sequential,
     });
@@ -287,6 +287,25 @@ function buildSupportedModesFromOptionStrings(
   }
 
   return supportedModes;
+}
+
+function buildCleanModeLabel(
+  option: string,
+  matterMode: VacuumMatterCleanMode,
+): string {
+  if (matterMode === VacuumMatterCleanMode.Auto) {
+    const normalized = normalizeText(option);
+    if (
+      normalized === "smart_mode" ||
+      normalized === "smartmode" ||
+      normalized === "smart_plan" ||
+      normalized === "smartplan"
+    ) {
+      return "SmartPlan";
+    }
+  }
+
+  return option;
 }
 
 function createActionEntityIds(

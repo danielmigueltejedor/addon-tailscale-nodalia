@@ -188,7 +188,7 @@ export function resolveVacuumSupportedModesFromControls(
   return [
     {
       matterMode: VacuumMatterCleanMode.Auto,
-      label,
+      label: buildAutoModeLabel(label),
       option: label,
       sequential: false,
     },
@@ -633,6 +633,20 @@ function selectSmartPlanOption(options: string[] | undefined): string | undefine
   }
 
   return options.find((option) => isSmartPlanOption(option));
+}
+
+function buildAutoModeLabel(option: string): string {
+  const normalized = normalizeText(option);
+  if (
+    normalized === "smart_mode" ||
+    normalized === "smartmode" ||
+    normalized === "smart_plan" ||
+    normalized === "smartplan"
+  ) {
+    return "SmartPlan";
+  }
+
+  return option;
 }
 
 function appendAction(

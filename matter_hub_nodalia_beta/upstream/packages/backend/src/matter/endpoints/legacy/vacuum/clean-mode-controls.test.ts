@@ -266,7 +266,7 @@ describe("clean-mode-controls", () => {
     ).toEqual([
       {
         matterMode: VacuumMatterCleanMode.Auto,
-        label: "smart_mode",
+        label: "SmartPlan",
         option: "smart_mode",
         sequential: false,
       },

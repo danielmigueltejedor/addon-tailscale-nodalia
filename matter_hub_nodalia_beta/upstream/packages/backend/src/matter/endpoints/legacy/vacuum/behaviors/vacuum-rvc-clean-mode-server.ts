@@ -205,7 +205,9 @@ function buildModeTags(
 ): RvcCleanMode.ModeTagStruct[] {
   switch (option.matterMode) {
     case VacuumMatterCleanMode.Auto:
-      return [{ value: RvcCleanMode.ModeTag.Auto }];
+      return isRegularSmartPlanMode(option)
+        ? [{ value: RvcCleanMode.ModeTag.VacuumThenMop }]
+        : [{ value: RvcCleanMode.ModeTag.Auto }];
     case VacuumMatterCleanMode.VacuumAndMop:
       return option.sequential
         ? [{ value: RvcCleanMode.ModeTag.VacuumThenMop }]
@@ -249,4 +251,33 @@ function mergeSupportedModes(
   }
 
   return merged;
+}
+
+function isRegularSmartPlanMode(option: VacuumCleanModeOption): boolean {
+  const normalizedLabel = normalizeText(option.label);
+  const normalizedOption = normalizeText(option.option);
+  return (
+    normalizedLabel === "smartplan" ||
+    normalizedLabel === "smart_plan" ||
+    normalizedOption === "smart_mode" ||
+    normalizedOption === "smartmode" ||
+    normalizedOption === "smart_plan" ||
+    normalizedOption === "smartplan"
+  );
+}
+
+function normalizeText(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}+/gu, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return normalized.length > 0 ? normalized : undefined;
 }

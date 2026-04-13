@@ -1,4 +1,9 @@
-# Home Assistant App: Nodalia Connect
+# 🔗 Home Assistant App: Nodalia Connect
+
+![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.1%2B-41BDF5?logo=home-assistant)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Status](https://img.shields.io/badge/status-stable-success.svg)
+![GitHub](https://img.shields.io/badge/hosted%20on-GitHub-black?logo=github)
 
 Tailscale es una VPN “zero config” que se instala en minutos, incluyendo tu instancia de Home Assistant.
 
@@ -465,3 +470,11 @@ MIT License
 Copyright (c) 2021-2025 Franck Nijhof
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+---
+
+## 💰 Donaciones
+
+Si te gusta este proyecto y quieres apoyar su desarrollo, considera hacer una donación:
+
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://paypal.me/DanielMiguelTejedor)

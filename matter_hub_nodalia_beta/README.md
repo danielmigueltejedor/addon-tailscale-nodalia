@@ -1,4 +1,9 @@
-# Matter Hub (Nodalia Beta)
+# 🌐 Matter Hub (Nodalia Beta)
+
+![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.1%2B-41BDF5?logo=home-assistant)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Status](https://img.shields.io/badge/status-beta-orange.svg)
+![GitHub](https://img.shields.io/badge/hosted%20on-GitHub-black?logo=github)
 
 Home Assistant app to bridge entities to Matter ecosystems.
 
@@ -22,3 +27,11 @@ Home Assistant app to bridge entities to Matter ecosystems.
   - `matter_service_area_action: vacuum.clean_area`
   - `matter_service_area_params_key: cleaning_area_id`
   - `room_map: { bano_del_dormitorio: \"Bano dormitorio\", despensa: \"Despensa\" }`
+
+---
+
+## 💰 Donations
+
+If you like this project and want to support its development, consider making a donation:
+
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://paypal.me/DanielMiguelTejedor)

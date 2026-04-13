@@ -54,6 +54,11 @@ describe("resolveEffectiveVacuumCleanModeDataForEntity", () => {
       VacuumMatterCleanMode.Mop,
       VacuumMatterCleanMode.Auto,
     ]);
+    expect(data.supportedModes[3]).toMatchObject({
+      matterMode: VacuumMatterCleanMode.Auto,
+      label: "SmartPlan",
+      option: "smart_mode",
+    });
     expect(data.actionEntityIds).toEqual({
       [VacuumMatterCleanMode.VacuumAndMop]:
         "select.roborock_qrevo_s_cleaning_mode",
