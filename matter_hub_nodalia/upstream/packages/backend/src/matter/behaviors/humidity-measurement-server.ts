@@ -2,10 +2,13 @@ import type {
   HomeAssistantEntityInformation,
   HomeAssistantEntityState,
 } from "@home-assistant-matter-hub/common";
+import { Logger } from "@matter/general";
 import { RelativeHumidityMeasurementServer as Base } from "@matter/main/behaviors";
 import { applyPatchState } from "../../utils/apply-patch-state.js";
 import { HomeAssistantEntityBehavior } from "./home-assistant-entity-behavior.js";
 import type { ValueGetter } from "./utils/cluster-config.js";
+
+const logger = Logger.get("HumidityMeasurementServer");
 
 export interface HumidityMeasurementConfig {
   getValue: ValueGetter<number | null>;
@@ -16,15 +19,25 @@ class HumidityMeasurementServerBase extends Base {
   declare state: HumidityMeasurementServerBase.State;
 
   override async initialize() {
-    super.initialize();
+    await super.initialize();
     const homeAssistant = await this.agent.load(HomeAssistantEntityBehavior);
     this.update(homeAssistant.entity);
     this.reactTo(homeAssistant.onChange, this.update);
   }
 
   private update(entity: HomeAssistantEntityInformation) {
+    if (!entity.state || !entity.state.attributes) {
+      return;
+    }
     const humidity = this.getHumidity(this.state.config, entity.state);
-    applyPatchState(this.state, { measuredValue: humidity });
+    logger.debug(
+      `Humidity ${entity.state.entity_id} raw=${entity.state.state} measuredValue=${humidity}`,
+    );
+    applyPatchState(this.state, {
+      measuredValue: humidity,
+      minMeasuredValue: 0,
+      maxMeasuredValue: 10000,
+    });
   }
 
   private getHumidity(
@@ -35,7 +48,7 @@ class HumidityMeasurementServerBase extends Base {
     if (humidity == null) {
       return null;
     }
-    return humidity * 100;
+    return Math.round(humidity * 100);
   }
 }
 

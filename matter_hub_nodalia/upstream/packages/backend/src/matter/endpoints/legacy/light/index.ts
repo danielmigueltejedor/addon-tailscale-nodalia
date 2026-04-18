@@ -3,11 +3,18 @@ import {
   LightDeviceColorMode,
 } from "@home-assistant-matter-hub/common";
 import type { EndpointType } from "@matter/main";
+import { HaElectricalEnergyMeasurementServer } from "../../../behaviors/electrical-energy-measurement-server.js";
+import { HaElectricalPowerMeasurementServer } from "../../../behaviors/electrical-power-measurement-server.js";
 import type { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
-import { ColorTemperatureLightType } from "./devices/color-temperature-light.js";
-import { DimmableLightType } from "./devices/dimmable-light.js";
+import {
+  DimmableLightType,
+  DimmableLightWithBatteryType,
+} from "./devices/dimmable-light.js";
 import { ExtendedColorLightType } from "./devices/extended-color-light.js";
-import { OnOffLightType } from "./devices/on-off-light-device.js";
+import {
+  OnOffLightType,
+  OnOffLightWithBatteryType,
+} from "./devices/on-off-light-device.js";
 
 const brightnessModes: LightDeviceColorMode[] = Object.values(
   LightDeviceColorMode,
@@ -27,26 +34,56 @@ export function LightDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
 ): EndpointType {
   const attributes = homeAssistantEntity.entity.state
-    .attributes as LightDeviceAttributes;
+    .attributes as LightDeviceAttributes & {
+    battery?: number;
+    battery_level?: number;
+  };
 
   const supportedColorModes: LightDeviceColorMode[] =
     attributes.supported_color_modes ?? [];
   const supportsBrightness = supportedColorModes.some((mode) =>
     brightnessModes.includes(mode),
   );
-  const supportsColorControl =
-    !!attributes.hs_color ||
-    supportedColorModes.some((mode) => colorModes.includes(mode));
+  const supportsColorControl = supportedColorModes.some((mode) =>
+    colorModes.includes(mode),
+  );
   const supportsColorTemperature = supportedColorModes.includes(
     LightDeviceColorMode.COLOR_TEMP,
   );
+  const hasBatteryAttr =
+    attributes.battery_level != null || attributes.battery != null;
+  const hasBatteryEntity = !!homeAssistantEntity.mapping?.batteryEntity;
+  const hasBattery = hasBatteryAttr || hasBatteryEntity;
 
-  const deviceType = supportsColorControl
-    ? ExtendedColorLightType(supportsColorTemperature)
-    : supportsColorTemperature
-      ? ColorTemperatureLightType
+  // Use ExtendedColorLight for all color-capable lights, including ColorTemperature-only lights.
+  // ColorTemperatureLightDevice has issues with Matter.js initialization that cause
+  // "Behaviors have errors" during endpoint creation. ExtendedColorLight works correctly
+  // with just the ColorTemperature feature enabled (supportsColorControl=false).
+  const deviceType =
+    supportsColorControl || supportsColorTemperature
+      ? ExtendedColorLightType(
+          supportsColorControl,
+          supportsColorTemperature,
+          hasBattery,
+        )
       : supportsBrightness
-        ? DimmableLightType
-        : OnOffLightType;
-  return deviceType.set({ homeAssistantEntity });
+        ? hasBattery
+          ? DimmableLightWithBatteryType
+          : DimmableLightType
+        : hasBattery
+          ? OnOffLightWithBatteryType
+          : OnOffLightType;
+  const hasPowerEntity = !!homeAssistantEntity.mapping?.powerEntity;
+  const hasEnergyEntity = !!homeAssistantEntity.mapping?.energyEntity;
+
+  // biome-ignore lint/suspicious/noExplicitAny: Union type doesn't support .with() directly
+  let device: any = deviceType;
+  if (hasPowerEntity) {
+    device = device.with(HaElectricalPowerMeasurementServer);
+  }
+  if (hasEnergyEntity) {
+    device = device.with(HaElectricalEnergyMeasurementServer);
+  }
+
+  return device.set({ homeAssistantEntity });
 }

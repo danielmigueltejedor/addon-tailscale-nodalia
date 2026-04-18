@@ -26,6 +26,32 @@ const deviceRegistry: HomeAssistantDeviceRegistry = {
   area_id: "area_id",
 };
 
+const deviceRegistryWithName: HomeAssistantDeviceRegistry = {
+  id: "device4711",
+  area_id: "area_id",
+  name: "Living Room Light",
+};
+
+const deviceRegistryWithUserName: HomeAssistantDeviceRegistry = {
+  id: "device4711",
+  area_id: "area_id",
+  name: "Living Room Light",
+  name_by_user: "My Custom Light Name",
+};
+
+const deviceRegistryWithModel: HomeAssistantDeviceRegistry = {
+  id: "device4711",
+  area_id: "area_id",
+  name: "Living Room Light",
+  model: "Hue Color Bulb",
+};
+
+const deviceRegistryWithDefaultModel: HomeAssistantDeviceRegistry = {
+  id: "device4711",
+  area_id: "area_id",
+  default_model: "Generic LED Bulb",
+};
+
 describe("matchEntityFilter.testMatcher", () => {
   it("should match the domain", () => {
     expect(
@@ -75,6 +101,163 @@ describe("matchEntityFilter.testMatcher", () => {
         registry,
       ),
     ).toBeFalsy();
+  });
+  it("should NOT match device label with legacy label type", () => {
+    const entityWithoutLabel = { ...registry, labels: [] };
+    const deviceWithLabel = { ...deviceRegistry, labels: ["device_label"] };
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Label,
+          value: "device_label",
+        },
+        deviceWithLabel,
+        entityWithoutLabel,
+      ),
+    ).toBeFalsy();
+  });
+  it("should match entity label with EntityLabel type", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.EntityLabel,
+          value: "test_label",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should NOT match device label with EntityLabel type", () => {
+    const entityWithoutLabel = { ...registry, labels: [] };
+    const deviceWithLabel = { ...deviceRegistry, labels: ["device_label"] };
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.EntityLabel,
+          value: "device_label",
+        },
+        deviceWithLabel,
+        entityWithoutLabel,
+      ),
+    ).toBeFalsy();
+  });
+  it("should match device label with DeviceLabel type", () => {
+    const entityWithoutLabel = { ...registry, labels: [] };
+    const deviceWithLabel = { ...deviceRegistry, labels: ["device_label"] };
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceLabel,
+          value: "device_label",
+        },
+        deviceWithLabel,
+        entityWithoutLabel,
+      ),
+    ).toBeTruthy();
+  });
+  it("should NOT match entity label with DeviceLabel type", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceLabel,
+          value: "test_label",
+        },
+        deviceRegistry,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+  it("should not match label when neither entity nor device has it", () => {
+    const entityWithoutLabel = { ...registry, labels: [] };
+    const deviceWithLabel = { ...deviceRegistry, labels: ["other_label"] };
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Label,
+          value: "missing_label",
+        },
+        deviceWithLabel,
+        entityWithoutLabel,
+      ),
+    ).toBeFalsy();
+  });
+  it("should match label case-insensitively (slugify fallback)", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Label,
+          value: "Test_Label",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should resolve label display name via labels registry", () => {
+    const labels = [
+      { label_id: "test_label", name: "Test Label" },
+      { label_id: "other", name: "Other" },
+    ];
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Label,
+          value: "Test Label",
+        },
+        undefined,
+        registry,
+        undefined,
+        labels,
+      ),
+    ).toBeTruthy();
+  });
+  it("should resolve label display name for DeviceLabel type", () => {
+    const entityWithoutLabel = { ...registry, labels: [] };
+    const deviceWithLabel = { ...deviceRegistry, labels: ["matter"] };
+    const labels = [{ label_id: "matter", name: "Matter" }];
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceLabel,
+          value: "Matter",
+        },
+        deviceWithLabel,
+        entityWithoutLabel,
+        undefined,
+        labels,
+      ),
+    ).toBeTruthy();
+  });
+  it("should NOT match device label via legacy label type with label registry", () => {
+    const entityWithoutLabel = { ...registry, labels: [] };
+    const deviceWithLabel = { ...deviceRegistry, labels: ["matter"] };
+    const labels = [{ label_id: "matter", name: "Matter" }];
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Label,
+          value: "Matter",
+        },
+        deviceWithLabel,
+        entityWithoutLabel,
+        undefined,
+        labels,
+      ),
+    ).toBeFalsy();
+  });
+  it("should slugify label value with special characters", () => {
+    const entityWithLabel = { ...registry, labels: ["my_smart_lights"] };
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Label,
+          value: "My Smart Lights",
+        },
+        undefined,
+        entityWithLabel,
+      ),
+    ).toBeTruthy();
   });
 
   it("should match the platform", () => {
@@ -217,6 +400,226 @@ describe("matchEntityFilter.testMatcher", () => {
         {
           type: HomeAssistantMatcherType.Pattern,
           value: "light.my_en*z*",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+
+  it("should match the regex", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Regex,
+          value: "^light\\.my_.*$",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should match a complex regex", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Regex,
+          value: "^(light|switch)\\..*entity$",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should not match the regex", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Regex,
+          value: "^switch\\..*$",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+  it("should return false for invalid regex", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Regex,
+          value: "[invalid(regex",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+
+  it("should match the device name", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceName,
+          value: "Living Room",
+        },
+        deviceRegistryWithName,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should match the device name case-insensitively", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceName,
+          value: "living room",
+        },
+        deviceRegistryWithName,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should prefer name_by_user over name", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceName,
+          value: "Custom Light",
+        },
+        deviceRegistryWithUserName,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should not match if name_by_user doesn't contain the value", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceName,
+          value: "Living Room",
+        },
+        deviceRegistryWithUserName,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+  it("should match the device name with wildcard pattern", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceName,
+          value: "Living*Light",
+        },
+        deviceRegistryWithName,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should not match if device is undefined", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceName,
+          value: "Living Room",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+  it("should not match if device has no name", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.DeviceName,
+          value: "Living Room",
+        },
+        deviceRegistry,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+
+  it("should match the product name", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.ProductName,
+          value: "Hue Color",
+        },
+        deviceRegistryWithModel,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should match the product name case-insensitively", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.ProductName,
+          value: "hue color bulb",
+        },
+        deviceRegistryWithModel,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should match the default_model if model is not set", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.ProductName,
+          value: "Generic LED",
+        },
+        deviceRegistryWithDefaultModel,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should match the product name with wildcard pattern", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.ProductName,
+          value: "Hue*Bulb",
+        },
+        deviceRegistryWithModel,
+        registry,
+      ),
+    ).toBeTruthy();
+  });
+  it("should not match if device is undefined for product name", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.ProductName,
+          value: "Hue",
+        },
+        undefined,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+  it("should not match if device has no model", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.ProductName,
+          value: "Hue",
+        },
+        deviceRegistry,
+        registry,
+      ),
+    ).toBeFalsy();
+  });
+
+  it("should return false for null matcher value", () => {
+    expect(
+      testMatcher(
+        {
+          type: HomeAssistantMatcherType.Pattern,
+          value: null as unknown as string,
         },
         undefined,
         registry,

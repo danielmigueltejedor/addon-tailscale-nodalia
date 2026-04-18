@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
 
-exec home-assistant-matter-hub start \
+exec nodalia-matter-hub start \
   --log-level="$(bashio::config 'app_log_level' 'info')" \
   --disable-log-colors="$(bashio::config 'disable_log_colors' 'false')" \
   --mdns-network-interface="$(bashio::config 'mdns_network_interface' '')" \

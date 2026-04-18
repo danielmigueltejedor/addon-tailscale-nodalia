@@ -16,8 +16,8 @@ ENV CI=true
 
 RUN pnpm install --frozen-lockfile \
   && pnpm --filter './packages/*' run build \
-  && pnpm --filter home-assistant-matter-hub run build \
-  && pnpm --filter home-assistant-matter-hub run bundle \
+  && pnpm --filter nodalia-matter-hub run build \
+  && pnpm --filter nodalia-matter-hub run bundle \
   && npm install -g ./apps/home-assistant-matter-hub/package.tgz
 
 WORKDIR /

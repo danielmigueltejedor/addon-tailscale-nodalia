@@ -8,10 +8,8 @@ export * from "./media-input.js";
 export * from "./occupancy-sensing.js";
 export * from "./on-off.js";
 export * from "./relative-humidity-measurement.js";
-export * from "./rvc-clean-mode.js";
 export * from "./rvc-operational-state.js";
 export * from "./rvc-run-mode.js";
-export * from "./service-area.js";
 export * from "./temperature-measurement.js";
 export * from "./thermostat.js";
 export * from "./window-covering.js";
@@ -25,21 +23,40 @@ export enum ClusterId {
 
   bridgedDeviceBasicInformation = "bridgedDeviceBasicInformation",
 
+  airQuality = "airQuality",
   booleanState = "booleanState",
+  carbonDioxideConcentrationMeasurement = "carbonDioxideConcentrationMeasurement",
+  carbonMonoxideConcentrationMeasurement = "carbonMonoxideConcentrationMeasurement",
   colorControl = "colorControl",
   doorLock = "doorLock",
+  electricalEnergyMeasurement = "electricalEnergyMeasurement",
+  electricalPowerMeasurement = "electricalPowerMeasurement",
+  flowMeasurement = "flowMeasurement",
   levelControl = "levelControl",
   fanControl = "fanControl",
   illuminanceMeasurement = "illuminanceMeasurement",
+  nitrogenDioxideConcentrationMeasurement = "nitrogenDioxideConcentrationMeasurement",
   occupancySensing = "occupancySensing",
   onOff = "onOff",
+  ozoneConcentrationMeasurement = "ozoneConcentrationMeasurement",
+  pm1ConcentrationMeasurement = "pm1ConcentrationMeasurement",
+  pm10ConcentrationMeasurement = "pm10ConcentrationMeasurement",
+  pm25ConcentrationMeasurement = "pm25ConcentrationMeasurement",
+  powerSource = "powerSource",
+  pressureMeasurement = "pressureMeasurement",
   relativeHumidityMeasurement = "relativeHumidityMeasurement",
+  smokeCoAlarm = "smokeCoAlarm",
   temperatureMeasurement = "temperatureMeasurement",
   thermostat = "thermostat",
+  thermostatUserInterfaceConfiguration = "thermostatUserInterfaceConfiguration",
+  totalVolatileOrganicCompoundsConcentrationMeasurement = "totalVolatileOrganicCompoundsConcentrationMeasurement",
+  valveConfigurationAndControl = "valveConfigurationAndControl",
   windowCovering = "windowCovering",
   mediaInput = "mediaInput",
   rvcCleanMode = "rvcCleanMode",
   rvcRunMode = "rvcRunMode",
   rvcOperationalState = "rvcOperationalState",
   serviceArea = "serviceArea",
+  switch = "switch",
+  modeSelect = "modeSelect",
 }

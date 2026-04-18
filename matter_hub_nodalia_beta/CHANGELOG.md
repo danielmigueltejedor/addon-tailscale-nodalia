@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0-beta.1
+- Full rebase on upstream `riddix/home-assistant-matter-hub` main. Pulls in all new device types (air-purifier, alarm-control-panel, dishwasher, pump, remote, select, siren, valve, water-heater), new sensors (air-quality, CO2, CO, TVOC, PM1/2.5/10, formaldehyde, ozone, NO2, radon, electrical energy/power, flow, pressure), new frontend pages (dashboard, devices, diagnostics, network-map, health, labels, plugins, settings, lock-credentials, startup, area-setup) and new APIs (backup, bridge-export/icon, device-image, diagnostic, entity-mapping, health, logs, metrics, network-diagnostic, websocket).
+- Upstream vacuum engine now supersedes Nodalia's custom clean-mode/service-area implementation. The upstream code handles room discovery for Dreame, Ecovacs, Roborock, Xiaomi MIOT and Valetudo (via MQTT), plus cleaning-mode pending-state reconciliation and fan-speed / mop-intensity mode trees.
+- Node runtime bumped to 24.
+- Upstream addon entrypoint adopted: dynamic Node heap sizing based on cgroup/available/total memory (clamped 256–1024 MB).
+- Nodalia branding preserved: app icon, "Nodalia" alt text, GitHub URL, Spanish i18n already included upstream.
+- Package renamed to `nodalia-matter-hub` (bin + pnpm filter).
+
 ## 0.2.0-beta.15
 - Changed Roborock-derived `SmartPlan` exposure in Matter `RvcCleanMode` to use a regular selectable mode presentation for Apple Home compatibility, instead of advertising it as a pure `Auto` mode that Apple surfaces as a separate automatic control.
 - SmartPlan-like options such as `smart_mode` / `smartplan` are now labelled as `SmartPlan` in Matter while still sending the original Home Assistant option back to the robot.

@@ -1,9 +1,11 @@
 import {
   type FanDeviceAttributes,
   FanDeviceDirection,
+  FanDeviceFeature,
   type HomeAssistantEntityState,
 } from "@home-assistant-matter-hub/common";
 import { FanControl } from "@matter/main/clusters";
+import { testBit } from "../../../../../utils/test-bit.js";
 import {
   FanControlServer,
   type FanControlServerConfig,
@@ -23,6 +25,37 @@ const fanControlConfig: FanControlServerConfig = {
         ? FanControl.AirflowDirection.Reverse
         : FanControl.AirflowDirection.Forward,
   isInAutoMode: (state) => attributes(state).preset_mode === "Auto",
+  // Preset mode support
+  getPresetModes: (state) => attributes(state).preset_modes,
+  getCurrentPresetMode: (state) => attributes(state).preset_mode,
+  supportsPercentage: (state) =>
+    testBit(
+      attributes(state).supported_features ?? 0,
+      FanDeviceFeature.SET_SPEED,
+    ),
+  // Rocking (oscillation) support
+  isOscillating: (state) => attributes(state).oscillating ?? false,
+  supportsOscillation: (state) =>
+    testBit(
+      attributes(state).supported_features ?? 0,
+      FanDeviceFeature.OSCILLATE,
+    ),
+  // Wind mode support - check if preset_modes contains natural/sleep
+  getWindMode: (state) => {
+    const mode = attributes(state).preset_mode?.toLowerCase();
+    if (mode === "natural" || mode === "nature") return "natural";
+    if (mode === "sleep") return "sleep";
+    return undefined;
+  },
+  supportsWind: (state) => {
+    const modes = attributes(state).preset_modes ?? [];
+    return modes.some(
+      (m) =>
+        m.toLowerCase() === "natural" ||
+        m.toLowerCase() === "nature" ||
+        m.toLowerCase() === "sleep",
+    );
+  },
 
   turnOff: () => ({ action: "fan.turn_off" }),
   turnOn: (percentage) => ({ action: "fan.turn_on", data: { percentage } }),
@@ -34,6 +67,21 @@ const fanControlConfig: FanControlServerConfig = {
         direction === FanControl.AirflowDirection.Forward
           ? FanDeviceDirection.FORWARD
           : FanDeviceDirection.REVERSE,
+    },
+  }),
+  setPresetMode: (presetMode) => ({
+    action: "fan.set_preset_mode",
+    data: { preset_mode: presetMode },
+  }),
+  setOscillation: (oscillating) => ({
+    action: "fan.oscillate",
+    data: { oscillating },
+  }),
+  setWindMode: (mode) => ({
+    action: "fan.set_preset_mode",
+    data: {
+      preset_mode:
+        mode === "natural" ? "Natural" : mode === "sleep" ? "Sleep" : "Normal",
     },
   }),
 };

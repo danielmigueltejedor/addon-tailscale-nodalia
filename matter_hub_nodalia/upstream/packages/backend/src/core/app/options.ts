@@ -1,4 +1,6 @@
+import { createRequire } from "node:module";
 import os from "node:os";
+import path from "node:path";
 import { VendorId } from "@matter/main";
 import type { ArgumentsCamelCase } from "yargs";
 import type { WebApiProps } from "../../api/web-api.js";
@@ -8,6 +10,26 @@ import type { HomeAssistantClientProps } from "../../services/home-assistant/hom
 import type { LoggerServiceProps } from "./logger.js";
 import type { MdnsOptions } from "./mdns.js";
 import type { StorageOptions } from "./storage.js";
+
+function resolveAppVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    // When installed globally via npm, this resolves to the published package.json
+    // and provides the real semantic version.
+    const pkg = require("home-assistant-matter-hub/package.json") as {
+      version?: string;
+    };
+    if (pkg.version && pkg.version !== "0.0.0") {
+      return pkg.version;
+    }
+  } catch {
+    // ignore — fall through to env var
+  }
+  if (process.env.APP_VERSION) {
+    return process.env.APP_VERSION;
+  }
+  return "0.0.0-dev";
+}
 
 export type OptionsProps = ArgumentsCamelCase<StartOptions> & {
   webUiDist: string | undefined;
@@ -19,9 +41,7 @@ export class Options {
   get mdns(): MdnsOptions {
     return {
       ipv4: true,
-      networkInterface: resolveMdnsNetworkInterface(
-        this.startOptions.mdnsNetworkInterface,
-      ),
+      networkInterface: notEmpty(this.startOptions.mdnsNetworkInterface),
     };
   }
 
@@ -29,6 +49,7 @@ export class Options {
     return {
       level: this.startOptions.logLevel,
       disableColors: this.startOptions.disableLogColors ?? false,
+      jsonOutput: this.startOptions.jsonLogs ?? false,
     };
   }
 
@@ -60,15 +81,28 @@ export class Options {
         item.toString(),
       ),
       webUiDist: this.startOptions.webUiDist,
+      version: resolveAppVersion(),
+      storageLocation: this.resolveStorageLocation(),
+      basePath: normalizeBasePath(this.startOptions.httpBasePath),
       auth,
+      mdnsInterface: notEmpty(this.startOptions.mdnsNetworkInterface),
+      mdnsIpv4: true,
     };
+  }
+
+  private resolveStorageLocation(): string {
+    const storageLocation = notEmpty(this.startOptions.storageLocation);
+    const homedir = os.homedir();
+    return storageLocation
+      ? path.resolve(storageLocation.replace(/^~\//, `${homedir}/`))
+      : path.join(homedir, ".home-assistant-matter-hub");
   }
 
   get bridgeService(): BridgeServiceProps {
     return {
       basicInformation: {
         vendorId: VendorId(0xfff1),
-        vendorName: "t0bst4r",
+        vendorName: "riddix",
         productId: 0x8000,
         productName: "MatterHub",
         productLabel: "Home Assistant Matter Hub",
@@ -79,33 +113,21 @@ export class Options {
   }
 }
 
+function normalizeBasePath(val: string | undefined): string {
+  let p = val?.trim() ?? "/";
+  if (!p.startsWith("/")) {
+    p = `/${p}`;
+  }
+  if (p.length > 1 && p.endsWith("/")) {
+    p = p.slice(0, -1);
+  }
+  return p;
+}
+
 function notEmpty(val: string | undefined | null): string | undefined {
   const value = val?.trim();
   if (value == null || value.length === 0) {
     return undefined;
   }
   return value;
-}
-
-function resolveMdnsNetworkInterface(
-  val: string | undefined | null,
-): string | undefined {
-  const networkInterface = notEmpty(val);
-  if (networkInterface == null) {
-    return undefined;
-  }
-
-  const interfaces = os.networkInterfaces();
-  const entries = interfaces[networkInterface];
-  if (
-    entries != null &&
-    entries.some((entry) => entry != null && entry.internal !== true)
-  ) {
-    return networkInterface;
-  }
-
-  console.warn(
-    `Configured mDNS network interface "${networkInterface}" is not available; falling back to automatic interface selection.`,
-  );
-  return undefined;
 }

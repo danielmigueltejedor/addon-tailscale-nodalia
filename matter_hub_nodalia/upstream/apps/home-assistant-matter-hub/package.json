@@ -1,16 +1,15 @@
 {
-  "name": "home-assistant-matter-hub",
+  "name": "nodalia-matter-hub",
   "description": "",
   "version": "0.0.0",
   "private": false,
   "type": "module",
   "bin": {
-    "home-assistant-matter-hub": "./dist/backend/cli.js"
+    "nodalia-matter-hub": "./dist/backend/cli.js"
   },
   "author": {
-    "email": "t0bst4r@outlook.com",
-    "name": "t0bst4r",
-    "url": "https://github.com/t0bst4r"
+    "name": "danielmigueltejedor",
+    "url": "https://github.com/danielmigueltejedor"
   },
   "keywords": [
     "home-assistant",
@@ -31,10 +30,10 @@
     "smart-home"
   ],
   "bugs": {
-    "url": "https://github.com/t0bst4r/home-assistant-matter-hub/issues"
+    "url": "https://github.com/danielmigueltejedor/apps-nodalia/issues"
   },
   "license": "Apache-2.0",
-  "repository": "github:t0bst4r/home-assistant-matter-hub",
+  "repository": "github:danielmigueltejedor/apps-nodalia",
   "scripts": {
     "cleanup": "npx rimraf node_modules dist pack LICENSE README.md",
     "build": "node build.js",
@@ -45,28 +44,36 @@
     "start": "dotenvx run -f ../../.env -- ./dist/backend/cli.js start"
   },
   "dependencies": {
-    "@matter/main": "0.16.10",
-    "@matter/nodejs": "0.16.10",
-    "@matter/general": "0.16.10",
-    "ajv": "8.17.1",
+    "@matter/main": "0.16.11",
+    "@matter/nodejs": "0.16.11",
+    "@matter/general": "0.16.11",
+    "ajv": "8.18.0",
+    "archiver": "7.0.1",
     "color": "5.0.3",
     "debounce": "3.0.0",
     "express": "5.2.1",
     "express-basic-auth": "1.2.1",
     "express-ip-access-control": "1.1.3",
     "home-assistant-js-websocket": "9.6.0",
-    "lodash-es": "4.17.23",
+    "lodash-es": "4.18.1",
+    "multer": "2.1.1",
     "nocache": "4.0.0",
     "rxjs": "7.8.2",
     "strip-color": "0.1.0",
-    "yargs": "18.0.0",
-    "ws": "8.19.0"
+    "unzipper": "0.12.3",
+    "ws": "8.19.0",
+    "yargs": "18.0.0"
   },
   "devDependencies": {
     "@home-assistant-matter-hub/backend": "workspace:*",
     "@home-assistant-matter-hub/frontend": "workspace:*",
     "@home-assistant-matter-hub/common": "workspace:*",
     "@types/lodash-es": "^4.17.12"
+  },
+  "overrides": {
+    "minimatch": "9.0.7",
+    "path-to-regexp": "^8.4.0",
+    "glob": "^13.0.0"
   },
   "nx": {
     "targets": {

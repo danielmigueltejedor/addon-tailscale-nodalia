@@ -4,6 +4,7 @@ import type { StartOptions } from "./start-options.js";
 
 export function startOptionsBuilder(yargs: Argv): Argv<StartOptions> {
   return yargs
+    .env("HAMH")
     .version(false)
     .config(
       "config",
@@ -26,6 +27,12 @@ export function startOptionsBuilder(yargs: Argv): Argv<StartOptions> {
     .option("disable-log-colors", {
       type: "boolean",
       default: false,
+    })
+    .option("json-logs", {
+      type: "boolean",
+      default: false,
+      description:
+        "Output logs in JSON format for structured logging (useful for log aggregation systems)",
     })
     .option("storage-location", {
       type: "string",
@@ -60,7 +67,7 @@ export function startOptionsBuilder(yargs: Argv): Argv<StartOptions> {
       type: "number",
       description:
         "The refresh rate (in seconds) to detect new devices & entities or their configurations",
-      default: 30,
+      default: 60,
     })
     .option("http-auth-username", {
       type: "string",
@@ -69,6 +76,11 @@ export function startOptionsBuilder(yargs: Argv): Argv<StartOptions> {
     .option("http-auth-password", {
       type: "string",
       description: "Password for HTTP basic authentication (optional)",
+    })
+    .option("http-base-path", {
+      type: "string",
+      description:
+        "Base path for the web interface and API when served behind a reverse proxy under a subfolder (e.g. /matter). Defaults to /",
     })
     .demandOption(["home-assistant-url", "home-assistant-access-token"]);
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+- Rebased stable on upstream `riddix/home-assistant-matter-hub` main (synced from `0.3.0-beta.1`). Adds every new device type, sensor, frontend page and API in the upstream line. See the beta changelog for the full list.
+- Node runtime bumped to 24; addon entrypoint gets dynamic Node heap sizing.
+- Nodalia branding and package name (`nodalia-matter-hub`) preserved.
+
 ## 0.1.2
 - Stable release bump to avoid downgrade from previously published `0.1.1`.
 - Keeps the full upstream feature set synced from Nodalia beta line for stable channel.

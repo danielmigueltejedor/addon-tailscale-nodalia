@@ -1,10 +1,38 @@
 import type { HomeAssistantEntityInformation } from "@home-assistant-matter-hub/common";
+import { Logger } from "@matter/general";
 import { LevelControlServer as Base } from "@matter/main/behaviors";
 import type { LevelControl } from "@matter/main/clusters/level-control";
 import { applyPatchState } from "../../utils/apply-patch-state.js";
 import type { FeatureSelection } from "../../utils/feature-selection.js";
 import { HomeAssistantEntityBehavior } from "./home-assistant-entity-behavior.js";
 import type { ValueGetter, ValueSetter } from "./utils/cluster-config.js";
+
+// Track when lights were turned on to detect Alexa's brightness reset pattern
+const lastTurnOnTimestamps = new Map<string, number>();
+
+// Track optimistic level writes to prevent stale HA state from overwriting them.
+// After a controller command, the HA state update with the OLD brightness can
+// arrive before HA processes the new command, causing the UI to revert.
+// Instead of a blanket cooldown, we track the expected level and only skip HA
+// updates that report a DIFFERENT (stale) value. Updates confirming the expected
+// value (within tolerance) are accepted immediately.
+interface OptimisticLevelState {
+  expectedLevel: number;
+  timestamp: number;
+}
+const optimisticLevelState = new Map<string, OptimisticLevelState>();
+const OPTIMISTIC_TIMEOUT_MS = 3000;
+const OPTIMISTIC_TOLERANCE = 5;
+
+/**
+ * Called by OnOffServer when a light is turned on via Matter command.
+ * Used to detect Alexa's brightness reset pattern.
+ */
+export function notifyLightTurnedOn(entityId: string): void {
+  lastTurnOnTimestamps.set(entityId, Date.now());
+}
+
+const logger = Logger.get("LevelControlServer");
 
 export interface LevelControlConfig {
   getValuePercent: ValueGetter<number | null>;
@@ -15,48 +43,142 @@ const FeaturedBase = Base.with("OnOff", "Lighting");
 
 export class LevelControlServerBase extends FeaturedBase {
   declare state: LevelControlServerBase.State;
+  private pendingTransitionTime: number | undefined;
 
   override async initialize() {
-    await super.initialize();
+    // Set default values BEFORE super.initialize() to prevent validation errors.
+    // The Lighting feature requires currentLevel to be in valid range (1-254).
+    // If the light is OFF, brightness from HA is null, which could cause issues.
+    if (this.state.currentLevel == null) {
+      this.state.currentLevel = 1; // Minimum valid level for Lighting feature
+    }
+    if (this.state.minLevel == null) {
+      this.state.minLevel = 1;
+    }
+    if (this.state.maxLevel == null) {
+      this.state.maxLevel = 0xfe; // 254
+    }
+    // Force onLevel to null so the base class's handleOnOffChange never
+    // overwrites currentLevel when the device turns on. Without this,
+    // Apple Home lights jump to 100% on every turn-on (#225).
+    this.state.onLevel = null;
+
+    logger.debug(`initialize: calling super.initialize()`);
+    try {
+      await super.initialize();
+      logger.debug(`initialize: super.initialize() completed successfully`);
+    } catch (error) {
+      logger.error(`initialize: super.initialize() FAILED:`, error);
+      throw error;
+    }
     const homeAssistant = await this.agent.load(HomeAssistantEntityBehavior);
     this.update(homeAssistant.entity);
     this.reactTo(homeAssistant.onChange, this.update);
   }
 
-  private update({ state }: HomeAssistantEntityInformation) {
+  private update(entity: HomeAssistantEntityInformation) {
+    if (!entity.state || !entity.state.attributes) {
+      return;
+    }
+    const { state } = entity;
     const config = this.state.config;
 
     const minLevel = 1;
     const maxLevel = 0xfe;
     const levelRange = maxLevel - minLevel;
 
-    const currentLevelPercent =
-      config.getValuePercent(state, this.agent) ??
-      this.state.currentLevelPercent;
+    // Get brightness as percentage (0.0-1.0) from Home Assistant
+    const currentLevelPercent = config.getValuePercent(state, this.agent);
     let currentLevel =
       currentLevelPercent != null
-        ? currentLevelPercent * levelRange + minLevel
+        ? Math.round(currentLevelPercent * levelRange + minLevel)
         : null;
 
     if (currentLevel != null) {
       currentLevel = Math.min(Math.max(minLevel, currentLevel), maxLevel);
     }
 
+    // Protect optimistic level from stale HA state updates.
+    // Accept updates that confirm the expected value; skip stale ones.
+    const optimistic = optimisticLevelState.get(entity.entity_id);
+    if (optimistic != null && currentLevel != null) {
+      if (Date.now() - optimistic.timestamp > OPTIMISTIC_TIMEOUT_MS) {
+        optimisticLevelState.delete(entity.entity_id);
+      } else if (
+        Math.abs(currentLevel - optimistic.expectedLevel) <=
+        OPTIMISTIC_TOLERANCE
+      ) {
+        optimisticLevelState.delete(entity.entity_id);
+      } else {
+        currentLevel = null;
+      }
+    }
+
     applyPatchState(this.state, {
       minLevel: minLevel,
       maxLevel: maxLevel,
-      currentLevel: currentLevel,
-      currentLevelPercent: currentLevelPercent,
-      onLevel: currentLevel ?? this.state.onLevel,
+      ...(currentLevel != null ? { currentLevel: currentLevel } : {}),
     });
+  }
+
+  // Fix for Google Home (#41): it sends moveToLevel/moveToLevelWithOnOff/step commands
+  // with transitionTime as null or completely omitted. The TLV schema is patched at startup
+  // (see patch-level-control-tlv.ts) to accept omitted fields. Here we default to 0 (instant).
+  override async moveToLevel(request: LevelControl.MoveToLevelRequest) {
+    if (request.transitionTime == null) {
+      request.transitionTime = 0;
+    }
+    this.pendingTransitionTime = request.transitionTime;
+    return super.moveToLevel(request);
+  }
+
+  override async moveToLevelWithOnOff(
+    request: LevelControl.MoveToLevelRequest,
+  ) {
+    if (request.transitionTime == null) {
+      request.transitionTime = 0;
+    }
+    this.pendingTransitionTime = request.transitionTime;
+    return super.moveToLevelWithOnOff(request);
+  }
+
+  override step(request: LevelControl.StepRequest) {
+    if (request.transitionTime == null) {
+      request.transitionTime = 0;
+    }
+    return super.step(request);
+  }
+
+  override stepWithOnOff(request: LevelControl.StepRequest) {
+    if (request.transitionTime == null) {
+      request.transitionTime = 0;
+    }
+    return super.stepWithOnOff(request);
   }
 
   override moveToLevelLogic(level: number) {
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
     const config = this.state.config;
+    const entityId = homeAssistant.entity.entity_id;
 
     const levelRange = this.maxLevel - this.minLevel;
     const levelPercent = (level - this.minLevel) / levelRange;
+
+    // Alexa workaround: After subscription renewal, Alexa sends on() followed by
+    // moveToLevel(254) within ~50ms, resetting brightness to 100%. Ignore max
+    // brightness commands that come shortly after turn-on. This is always active
+    // because the 200ms window is too short for intentional human interaction.
+    const lastTurnOn = lastTurnOnTimestamps.get(entityId);
+    const timeSinceTurnOn = lastTurnOn ? Date.now() - lastTurnOn : Infinity;
+    const isMaxBrightness = level >= this.maxLevel;
+
+    if (isMaxBrightness && timeSinceTurnOn < 200) {
+      logger.debug(
+        `[${entityId}] Ignoring moveToLevel(${level}) - Alexa brightness reset detected ` +
+          `(${timeSinceTurnOn}ms after turn-on)`,
+      );
+      return;
+    }
 
     const current = config.getValuePercent(
       homeAssistant.entity.state,
@@ -65,16 +187,30 @@ export class LevelControlServerBase extends FeaturedBase {
     if (levelPercent === current) {
       return;
     }
-    homeAssistant.callAction(
-      config.moveToLevelPercent(levelPercent, this.agent),
-    );
+    const action = config.moveToLevelPercent(levelPercent, this.agent);
+    const transitionTimeTenths = this.pendingTransitionTime;
+    this.pendingTransitionTime = undefined;
+    if (transitionTimeTenths && transitionTimeTenths > 0) {
+      action.data = {
+        ...action.data,
+        transition: transitionTimeTenths / 10,
+      };
+    }
+    // Update currentLevel immediately so controllers get instant feedback
+    // in the command response. Without this, Apple Home reads the stale
+    // currentLevel before the HA state update arrives and reverts the UI.
+    this.state.currentLevel = level;
+    optimisticLevelState.set(entityId, {
+      expectedLevel: level,
+      timestamp: Date.now(),
+    });
+    homeAssistant.callAction(action);
   }
 }
 
 export namespace LevelControlServerBase {
   export class State extends FeaturedBase.State {
     config!: LevelControlConfig;
-    currentLevelPercent: number | null = null;
   }
 }
 

@@ -5,8 +5,14 @@ import type {
 } from "@home-assistant-matter-hub/common";
 import { useCallback, useMemo } from "react";
 import {
+  type BridgePriorityUpdate,
+  forceSyncBridge as forceSyncBridgeApi,
+  updateBridgePriorities as updateBridgePrioritiesApi,
+} from "../../api/bridges.ts";
+import {
   createBridge,
   deleteBridge,
+  loadBridges,
   resetBridge,
   updateBridge,
 } from "../../state/bridges/bridge-actions.ts";
@@ -87,6 +93,35 @@ export function useDeleteBridge(): (bridgeId: string) => Promise<void> {
       if (res.meta.requestStatus === "rejected") {
         throw (res as { error: AsyncError }).error;
       }
+    },
+    [dispatch],
+  );
+}
+
+export function useUpdateBridgePriorities(): (
+  updates: BridgePriorityUpdate[],
+) => Promise<void> {
+  const dispatch = useAppDispatch();
+  return useCallback(
+    async (updates: BridgePriorityUpdate[]) => {
+      await updateBridgePrioritiesApi(updates);
+      // Reload bridges to get updated priorities
+      await dispatch(loadBridges());
+    },
+    [dispatch],
+  );
+}
+
+export function useForceSyncBridge(): (
+  bridgeId: string,
+) => Promise<{ syncedCount: number; bridge: BridgeDataWithMetadata }> {
+  const dispatch = useAppDispatch();
+  return useCallback(
+    async (bridgeId: string) => {
+      const result = await forceSyncBridgeApi(bridgeId);
+      // Reload bridges to reflect any state changes
+      await dispatch(loadBridges());
+      return result;
     },
     [dispatch],
   );

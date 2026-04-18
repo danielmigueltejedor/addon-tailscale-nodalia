@@ -1,17 +1,91 @@
 import type { JSONSchema7 } from "json-schema";
-import { HomeAssistantMatcherType } from "../home-assistant-filter.js";
 
 const homeAssistantMatcherSchema: JSONSchema7 = {
   type: "object",
   default: { type: "", value: "" },
   properties: {
     type: {
-      title: "Tipo",
+      title: "Type",
       type: "string",
-      enum: Object.values(HomeAssistantMatcherType),
+      oneOf: [
+        {
+          const: "pattern",
+          title: "pattern",
+          description:
+            "Wildcard pattern matching entity IDs. Use * as wildcard. Example: 'light.living_room_*' matches all lights in the living room.",
+        },
+        {
+          const: "regex",
+          title: "regex",
+          description:
+            "Full regular expression matching entity IDs. Use ^ and $ for anchors. Example: '^(light|switch)\\.kitchen_.*' matches all kitchen lights and switches.",
+        },
+        {
+          const: "domain",
+          title: "domain",
+          description:
+            "Match entities by their domain (the part before the dot). Example: 'light', 'switch', 'sensor'.",
+        },
+        {
+          const: "platform",
+          title: "platform",
+          description:
+            "Match entities by their integration/platform. Example: 'hue', 'zwave', 'mqtt'.",
+        },
+        {
+          const: "label",
+          title: "label (deprecated)",
+          description:
+            "Deprecated: use entity_label or device_label instead. Behaves like entity_label.",
+        },
+        {
+          const: "entity_label",
+          title: "entity_label",
+          description:
+            "Matches only entities that have this label assigned directly. Other entities of the same device are NOT included.",
+        },
+        {
+          const: "device_label",
+          title: "device_label",
+          description:
+            "Matches ALL entities of a device if the device has this label. Use this to include a complete device with all its entities.",
+        },
+        {
+          const: "area",
+          title: "area",
+          description:
+            "Match entities by their area slug. Example: 'living_room', 'bedroom'.",
+        },
+        {
+          const: "entity_category",
+          title: "entity_category",
+          description:
+            "Match entities by their category. Example: 'config', 'diagnostic' to exclude configuration entities.",
+        },
+        {
+          const: "device_name",
+          title: "device_name",
+          description:
+            "Match entities by their device name. Supports wildcards. Example: '*Philips*' matches all Philips devices.",
+        },
+        {
+          const: "product_name",
+          title: "product_name",
+          description:
+            "Match entities by their product/model name. Supports wildcards. Example: 'Hue*Bulb'.",
+        },
+        {
+          const: "device_class",
+          title: "device_class",
+          description:
+            "Match entities by their device class attribute. Example: 'temperature', 'motion', 'door', 'window'.",
+        },
+      ],
     },
     value: {
-      title: "Valor",
+      title: "Value",
+      description:
+        "For labels, use the display name or the label_id (slug). You can look up both on the Labels page in the sidebar.",
       type: "string",
       minLength: 1,
     },
@@ -21,18 +95,26 @@ const homeAssistantMatcherSchema: JSONSchema7 = {
 };
 
 const homeAssistantFilterSchema: JSONSchema7 = {
-  title: "Incluir o excluir entidades",
+  title: "Include or exclude entities",
   type: "object",
   properties: {
     include: {
-      title: "Incluir",
+      title: "Include",
       type: "array",
       items: homeAssistantMatcherSchema,
     },
     exclude: {
-      title: "Excluir",
+      title: "Exclude",
       type: "array",
       items: homeAssistantMatcherSchema,
+    },
+    includeMode: {
+      title: "Include Mode",
+      type: "string",
+      description:
+        "How to combine include rules: 'any' matches if ANY rule matches (OR), 'all' matches only if ALL rules match (AND). Default: 'any'",
+      enum: ["any", "all"],
+      default: "any",
     },
   },
   required: ["include", "exclude"],
@@ -40,96 +122,187 @@ const homeAssistantFilterSchema: JSONSchema7 = {
 };
 
 const featureFlagSchema: JSONSchema7 = {
-  title: "Funciones avanzadas",
+  title: "Feature Flags",
   type: "object",
   properties: {
     coverDoNotInvertPercentage: {
-      title: "No invertir porcentajes en persianas",
+      title: "Do not invert Percentages for Covers",
       description:
-        "Mantiene el mismo porcentaje que Home Assistant para persianas/cortinas (no estándar Matter).",
+        "Do not invert the percentage of covers to match Home Assistant (not Matter compliant)",
+      type: "boolean",
+      default: false,
+    },
+
+    coverUseHomeAssistantPercentage: {
+      title: "Use Home Assistant Percentage for Covers (Alexa-friendly)",
+      description:
+        "Display cover percentages matching Home Assistant values in Matter controllers like Alexa. " +
+        "This makes the displayed percentage match what you see in Home Assistant, but the semantic meaning differs: " +
+        "in HA, higher percentage = more open; in Alexa, higher percentage is typically interpreted as more closed. " +
+        "Open/Close commands will still work correctly.",
+      type: "boolean",
+      default: false,
+    },
+
+    coverSwapOpenClose: {
+      title: "Swap Open/Close for Covers",
+      description:
+        "Swap open/close commands and invert position reporting for covers. Enable this if Alexa voice commands " +
+        "are reversed (saying 'close' opens the blinds and vice versa).",
       type: "boolean",
       default: false,
     },
 
     includeHiddenEntities: {
-      title: "Incluir entidades ocultas",
+      title: "Include Hidden Entities",
       description:
-        "Incluye entidades marcadas como ocultas en Home Assistant.",
+        "Include entities that are marked as hidden in Home Assistant",
       type: "boolean",
       default: false,
     },
-  },
-  additionalProperties: false,
-};
 
-const deviceIdentitySchema: JSONSchema7 = {
-  title: "Identidad del dispositivo bridged",
-  description:
-    "Opcional: sobrescribe metadatos visibles en ecosistemas Matter (fabricante/modelo/serie/firmware) cuando Home Assistant no aporta valores correctos.",
-  type: "object",
-  properties: {
-    vendorName: {
-      title: "Fabricante",
-      type: "string",
-      minLength: 1,
-      maxLength: 32,
-    },
-    productName: {
-      title: "Modelo",
-      type: "string",
-      minLength: 1,
-      maxLength: 32,
-    },
-    productLabel: {
-      title: "Etiqueta de producto",
-      type: "string",
-      minLength: 1,
-      maxLength: 64,
-    },
-    serialNumber: {
-      title: "Número de serie",
-      type: "string",
-      minLength: 1,
-      maxLength: 32,
-    },
-    softwareVersionString: {
-      title: "Firmware (texto)",
+    serverMode: {
+      title: "Server Mode (for Robot Vacuums)",
       description:
-        "Opcional. Déjalo vacío para usar automáticamente la versión detectada en Home Assistant (ej: 02.07.14).",
-      type: "string",
-      minLength: 1,
-      maxLength: 64,
+        "Expose the device as a standalone Matter device instead of a bridged device. " +
+        "This is required for Apple Home to properly support Siri voice commands for Robot Vacuums. " +
+        "IMPORTANT: Only ONE device should be in this bridge when server mode is enabled.",
+      type: "boolean",
+      default: false,
+    },
+
+    autoBatteryMapping: {
+      title: "Auto Battery Mapping",
+      description:
+        "Automatically assign battery sensors from the same Home Assistant device to the main entity. " +
+        "When enabled, battery sensors will be merged into their parent devices instead of appearing as separate devices.",
+      type: "boolean",
+      default: false,
+    },
+
+    autoHumidityMapping: {
+      title: "Auto Humidity Mapping",
+      description:
+        "Automatically combine humidity sensors with temperature sensors from the same Home Assistant device. " +
+        "When enabled, humidity sensors will be merged into temperature sensors to create combined TemperatureHumiditySensor devices.",
+      type: "boolean",
+      default: true,
+    },
+
+    autoPressureMapping: {
+      title: "Auto Pressure Mapping",
+      description:
+        "Automatically combine pressure sensors with temperature sensors from the same Home Assistant device. " +
+        "When enabled, pressure sensors will be merged into temperature sensors to create combined sensor devices.",
+      type: "boolean",
+      default: true,
+    },
+
+    autoComposedDevices: {
+      title: "Auto Composed Devices",
+      description:
+        "Master toggle: automatically combine related entities from the same Home Assistant device " +
+        "into single Matter endpoints. Enables battery, humidity, pressure, power, and energy auto-mapping at once. " +
+        "This provides a cleaner device experience in Matter controllers (e.g., a Shelly Plug appears as one device with power monitoring).",
+      type: "boolean",
+      default: false,
+    },
+
+    autoForceSync: {
+      title: "Auto Force Sync",
+      description:
+        "Periodically compare and push all device states to connected controllers every 90 seconds. " +
+        "Enable this if devices get out of sync after extended periods. " +
+        "Health checks for dead sessions always run regardless of this setting.",
+      type: "boolean",
+      default: false,
+    },
+
+    productNameFromNodeLabel: {
+      title: "Product Name from Node Label",
+      description:
+        "Report the entity's node label (custom name / friendly name / entity id) as the Matter productName. " +
+        "Useful for controllers like Aqara that display productName as the device name instead of nodeLabel. " +
+        "A per-entity customProductName still takes precedence.",
+      type: "boolean",
+      default: false,
+    },
+
+    vacuumOnOff: {
+      title: "Vacuum: Include OnOff Cluster (Alexa)",
+      description:
+        "Add an OnOff cluster to robot vacuum endpoints. " +
+        "Alexa REQUIRES this (PowerController) to show robotic vacuums in the app. " +
+        "Without it, Alexa commissions the device but never displays it. " +
+        "In Server Mode this is enabled automatically — only check this for bridge mode. " +
+        "WARNING: OnOff is NOT part of the Matter RVC device type specification. " +
+        "Enabling this may break Apple Home (shows 'Updating') and Google Home.",
+      type: "boolean",
     },
   },
-  additionalProperties: false,
 };
 
 export const bridgeConfigSchema: JSONSchema7 = {
   type: "object",
-  title: "Configuración del puente",
+  title: "Bridge Config",
   properties: {
     name: {
-      title: "Nombre",
+      title: "Name",
       type: "string",
       minLength: 1,
       maxLength: 32,
     },
     port: {
-      title: "Puerto",
+      title: "Port",
       type: "number",
       minimum: 1,
     },
+    icon: {
+      title: "Icon",
+      type: "string",
+      description: "Icon to display for this bridge in the UI",
+      enum: [
+        "light",
+        "switch",
+        "climate",
+        "cover",
+        "fan",
+        "lock",
+        "sensor",
+        "media_player",
+        "vacuum",
+        "remote",
+        "humidifier",
+        "speaker",
+        "garage",
+        "door",
+        "window",
+        "motion",
+        "battery",
+        "power",
+        "camera",
+        "default",
+      ],
+    },
     countryCode: {
-      title: "Código de país",
+      title: "Country Code",
       type: "string",
       description:
-        "Código ISO 3166-1 alfa-2 del país donde se encuentra el nodo. Solo es necesario si el comisionado falla por falta de código de país.",
+        "An ISO 3166-1 alpha-2 code to represent the country in which the Node is located. Only needed if the commissioning fails due to missing country code.",
       minLength: 2,
       maxLength: 3,
     },
+    priority: {
+      title: "Startup Priority",
+      type: "number",
+      description:
+        "Startup order priority. Lower values start first. Default is 100.",
+      default: 100,
+      minimum: 1,
+      maximum: 999,
+    },
     filter: homeAssistantFilterSchema,
     featureFlags: featureFlagSchema,
-    deviceIdentity: deviceIdentitySchema,
   },
   required: ["name", "port", "filter"],
   additionalProperties: false,

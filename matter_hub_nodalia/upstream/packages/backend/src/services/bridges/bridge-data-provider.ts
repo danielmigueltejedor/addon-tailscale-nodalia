@@ -1,9 +1,10 @@
 import type {
   BridgeBasicInformation,
   BridgeData,
-  BridgeDeviceIdentityOverrides,
   BridgeFeatureFlags,
+  BridgeIconType,
   BridgeStatus,
+  FailedEntity,
   HomeAssistantFilter,
   UpdateBridgeRequest,
 } from "@home-assistant-matter-hub/common";
@@ -45,11 +46,14 @@ export class BridgeDataProvider extends Service implements BridgeData {
   get featureFlags(): BridgeFeatureFlags | undefined {
     return this.data.featureFlags;
   }
-  get deviceIdentity(): BridgeDeviceIdentityOverrides | undefined {
-    return this.data.deviceIdentity;
-  }
   get countryCode(): string | undefined {
     return this.data.countryCode;
+  }
+  get icon(): BridgeIconType | undefined {
+    return this.data.icon;
+  }
+  get priority(): number | undefined {
+    return this.data.priority;
   }
 
   /************************************************
@@ -62,28 +66,6 @@ export class BridgeDataProvider extends Service implements BridgeData {
     Object.assign(this.data, data);
   }
 
-  mergeDeviceIdentityDefaults(defaults: BridgeDeviceIdentityOverrides) {
-    const next: Partial<Record<DeviceIdentityField, string>> = {};
-    for (const field of DEVICE_IDENTITY_FIELDS) {
-      const value = normalizeString(defaults[field]);
-      if (value != null) {
-        next[field] = value;
-      }
-    }
-
-    if (Object.keys(next).length === 0) {
-      return;
-    }
-
-    const current = this.data.deviceIdentity ?? {};
-    Object.assign(this.data, {
-      deviceIdentity: {
-        ...next,
-        ...current,
-      },
-    });
-  }
-
   /**
    * @deprecated
    */
@@ -91,6 +73,7 @@ export class BridgeDataProvider extends Service implements BridgeData {
     status: BridgeServerStatus,
     serverNode: ServerNode,
     deviceCount: number,
+    failedEntities: FailedEntity[] = [],
   ) {
     const commissioning = serverNode.state.commissioning;
     return {
@@ -99,9 +82,10 @@ export class BridgeDataProvider extends Service implements BridgeData {
       filter: this.filter,
       port: this.port,
       featureFlags: this.featureFlags,
-      deviceIdentity: this.deviceIdentity,
       basicInformation: this.basicInformation,
       countryCode: this.countryCode,
+      icon: this.icon,
+      priority: this.priority,
       status: status.code,
       statusReason: status.reason,
       commissioning: commissioning
@@ -122,24 +106,7 @@ export class BridgeDataProvider extends Service implements BridgeData {
           }
         : undefined,
       deviceCount,
+      failedEntities: failedEntities.length > 0 ? failedEntities : undefined,
     };
   }
-}
-
-type DeviceIdentityField = keyof BridgeDeviceIdentityOverrides;
-
-const DEVICE_IDENTITY_FIELDS: readonly DeviceIdentityField[] = [
-  "vendorName",
-  "productName",
-  "productLabel",
-  "serialNumber",
-  "softwareVersionString",
-];
-
-function normalizeString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : undefined;
 }

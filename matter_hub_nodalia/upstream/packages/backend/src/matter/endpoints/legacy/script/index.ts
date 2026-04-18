@@ -6,13 +6,12 @@ import { IdentifyServer } from "../../../behaviors/identify-server.js";
 import { OnOffServer } from "../../../behaviors/on-off-server.js";
 
 const ScriptOnOffServer = OnOffServer({
+  isOn: () => false,
   turnOn: () => ({
     action: "script.turn_on",
   }),
-  turnOff: () => ({
-    action: "script.turn_off",
-  }),
-}).with("Lighting");
+  turnOff: null,
+});
 
 const ScriptDeviceType = OnOffPlugInUnitDevice.with(
   BasicInformationServer,

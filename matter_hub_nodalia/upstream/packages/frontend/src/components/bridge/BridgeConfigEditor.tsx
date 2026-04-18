@@ -1,73 +1,34 @@
 import {
   type BridgeConfig,
+  type BridgeIconType,
   bridgeConfigSchema,
 } from "@home-assistant-matter-hub/common";
-import { DataObject, Tune } from "@mui/icons-material";
+import { LibraryBooks, TextFields } from "@mui/icons-material";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
 import Grid from "@mui/material/Grid";
 import Link from "@mui/material/Link";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
-import type { UiSchema } from "@rjsf/utils";
-import { type MouseEvent, useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { navigation } from "../../routes.tsx";
 import { FormEditor } from "../misc/editors/FormEditor";
 import { JsonEditor } from "../misc/editors/JsonEditor";
 import type { ValidationError } from "../misc/editors/validation-error.ts";
+import { BridgeIconUpload } from "./BridgeIconUpload.tsx";
+import { FilterPreview } from "./FilterPreview.tsx";
+import { BridgeObjectFieldTemplate } from "./rjsf/BridgeObjectFieldTemplate.tsx";
+import { CompactArrayFieldTemplate } from "./rjsf/CompactArrayFieldTemplate.tsx";
+import { FeatureFlagsField } from "./rjsf/FeatureFlagsField.tsx";
 
 enum BridgeEditorMode {
   JSON_EDITOR = "JSON_EDITOR",
   FIELDS_EDITOR = "FIELDS_EDITOR",
 }
-
-const bridgeConfigUiSchema: UiSchema = {
-  name: {
-    "ui:placeholder": "Ej. Puente Principal",
-  },
-  port: {
-    "ui:help": "Puerto TCP para el puente Matter (por defecto 5540).",
-  },
-  countryCode: {
-    "ui:placeholder": "ES",
-  },
-  filter: {
-    include: {
-      "ui:options": {
-        orderable: false,
-      },
-    },
-    exclude: {
-      "ui:options": {
-        orderable: false,
-      },
-    },
-  },
-  deviceIdentity: {
-    vendorName: {
-      "ui:placeholder": "Ej. Roborock",
-    },
-    productName: {
-      "ui:placeholder": "Ej. Qrevo S",
-    },
-    productLabel: {
-      "ui:placeholder": "Ej. Aspirador principal",
-    },
-    serialNumber: {
-      "ui:placeholder": "Ej. R77MBD44501217",
-    },
-    softwareVersionString: {
-      "ui:placeholder": "Ej. 02.07.14",
-    },
-  },
-  "ui:submitButtonOptions": {
-    norender: true,
-  },
-};
 
 export interface BridgeConfigEditorProps {
   bridgeId?: string;
@@ -78,16 +39,16 @@ export interface BridgeConfigEditorProps {
 }
 
 export const BridgeConfigEditor = (props: BridgeConfigEditorProps) => {
+  const { t } = useTranslation();
   const [editorMode, setEditorMode] = useState<BridgeEditorMode>(
     BridgeEditorMode.FIELDS_EDITOR,
   );
-  const handleEditorModeChange = (
-    _: MouseEvent<HTMLElement>,
-    nextMode: BridgeEditorMode | null,
-  ) => {
-    if (nextMode != null) {
-      setEditorMode(nextMode);
-    }
+  const toggleEditor = () => {
+    setEditorMode(
+      editorMode === BridgeEditorMode.FIELDS_EDITOR
+        ? BridgeEditorMode.JSON_EDITOR
+        : BridgeEditorMode.FIELDS_EDITOR,
+    );
   };
 
   const [config, setConfig] = useState<object | undefined>(props.bridge);
@@ -104,7 +65,7 @@ export const BridgeConfigEditor = (props: BridgeConfigEditorProps) => {
         return [
           {
             instancePath: "/port",
-            message: `El puerto ya está en uso por el puente con id ${usedBy}`,
+            message: `Port is already used by bridge with id ${usedBy}`,
           },
         ];
       }
@@ -114,9 +75,72 @@ export const BridgeConfigEditor = (props: BridgeConfigEditorProps) => {
   );
 
   const onChange = (data: object | undefined, isValid: boolean) => {
-    setConfig(data);
+    // Preserve the icon field when FormEditor/JsonEditor updates
+    // since icon is managed separately by BridgeIconUpload
+    const prevIcon = (prev: object | undefined) => (prev as BridgeConfig)?.icon;
+    setConfig((prev) => {
+      const icon = prevIcon(prev);
+      return icon != null ? { ...data, icon } : { ...data };
+    });
     setIsValid(isValid);
   };
+
+  const handleIconChange = useCallback((icon: BridgeIconType | undefined) => {
+    setConfig((prev) => {
+      if (icon != null) {
+        return { ...prev, icon };
+      }
+      const { icon: _, ...rest } = (prev ?? {}) as BridgeConfig & {
+        icon?: BridgeIconType;
+      };
+      return rest;
+    });
+  }, []);
+
+  const warnings = useMemo(() => {
+    const cfg = config as Partial<BridgeConfig> | undefined;
+    const flags = cfg?.featureFlags;
+    const result: { severity: "warning" | "error"; message: string }[] = [];
+
+    if (flags?.serverMode) {
+      result.push({
+        severity: "warning",
+        message:
+          "Server Mode is enabled. Only ONE device should be in this bridge. " +
+          "Multiple devices will cause errors.",
+      });
+    }
+
+    if (flags?.serverMode && flags?.vacuumOnOff === false) {
+      result.push({
+        severity: "warning",
+        message:
+          "Server Mode with Vacuum OnOff disabled: Alexa REQUIRES the OnOff cluster " +
+          "(PowerController) for robotic vacuums. Without it, the vacuum commissions " +
+          "but never appears in Alexa. Only disable this for Apple Home.",
+      });
+    }
+
+    if (!flags?.serverMode && flags?.vacuumOnOff) {
+      result.push({
+        severity: "warning",
+        message:
+          "Vacuum OnOff is enabled in bridge mode. This adds a non-standard cluster " +
+          "to the RVC device type which may cause issues with Apple Home and Google Home.",
+      });
+    }
+
+    if (flags?.autoForceSync && flags?.autoComposedDevices) {
+      result.push({
+        severity: "warning",
+        message:
+          "Auto Force Sync with Auto Composed Devices increases network traffic. " +
+          "Composed devices have more clusters, so each sync cycle sends more data.",
+      });
+    }
+
+    return result;
+  }, [config]);
 
   const saveAction = async () => {
     if (!isValid) {
@@ -126,107 +150,129 @@ export const BridgeConfigEditor = (props: BridgeConfigEditorProps) => {
   };
 
   return (
-    <Paper
-      variant="outlined"
-      sx={(theme) => ({
-        p: { xs: 2, md: 3 },
-        borderRadius: 3,
-        background:
-          theme.palette.mode === "dark"
-            ? "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%)"
-            : "linear-gradient(180deg, rgba(8,114,138,0.06) 0%, rgba(8,114,138,0.015) 100%)",
-      })}
-    >
-      <Stack spacing={3}>
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          justifyContent="space-between"
-          alignItems={{ xs: "flex-start", md: "center" }}
-          spacing={2}
-        >
-          <Box>
-            <Typography variant="h6">Opciones de configuración</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Define cómo se expone este puente en Matter y qué entidades incluye.
-            </Typography>
-          </Box>
+    <>
+      <Alert severity="warning" variant="outlined">
+        Please consult{" "}
+        <Link href={navigation.faq.bridgeConfig} target="_blank">
+          the documentation
+        </Link>{" "}
+        for proper bridge configurations.{" "}
+        <strong>
+          Especially if you are using labels, see the "Labels" section.
+        </strong>
+      </Alert>
 
-          <ToggleButtonGroup
-            value={editorMode}
-            exclusive
-            size="small"
-            color="primary"
-            onChange={handleEditorModeChange}
-          >
-            <ToggleButton value={BridgeEditorMode.FIELDS_EDITOR}>
-              <Tune fontSize="small" sx={{ mr: 0.75 }} />
-              Formulario
-            </ToggleButton>
-            <ToggleButton value={BridgeEditorMode.JSON_EDITOR}>
-              <DataObject fontSize="small" sx={{ mr: 0.75 }} />
-              JSON
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Stack>
+      <Alert severity="info" variant="outlined">
+        <strong>Community tip:</strong> Users have reported that bridges with a
+        large number of devices can become unstable depending on the controller.
+        If you experience connectivity issues, consider splitting your devices
+        across multiple bridges.
+      </Alert>
 
-        <Alert severity="info" variant="outlined">
-          Consulta{" "}
-          <Link href={navigation.faq.bridgeConfig} target="_blank">
-            la documentación
-          </Link>{" "}
-          para una configuración óptima del puente.{" "}
-          <strong>
-            Si usas etiquetas, revisa especialmente la sección &quot;Etiquetas&quot;.
-          </strong>
+      {warnings.map((w) => (
+        <Alert key={w.message} severity={w.severity} variant="outlined">
+          {w.message}
         </Alert>
+      ))}
 
-        <Box
-          sx={{
-            p: { xs: 1.5, md: 2 },
-            borderRadius: 2,
-            border: 1,
-            borderColor: "divider",
-            bgcolor: "background.paper",
-          }}
-        >
-          {editorMode === BridgeEditorMode.FIELDS_EDITOR && (
-            <FormEditor
-              value={config ?? {}}
-              onChange={onChange}
-              schema={bridgeConfigSchema}
-              uiSchema={bridgeConfigUiSchema}
-              customValidate={validatePort}
-            />
-          )}
-
-          {editorMode === BridgeEditorMode.JSON_EDITOR && (
-            <JsonEditor
-              value={config ?? {}}
-              onChange={onChange}
-              schema={bridgeConfigSchema}
-              customValidate={validatePort}
-            />
-          )}
+      <Stack spacing={2}>
+        <Box display="flex" justifyContent={"flex-end"}>
+          <Button
+            onClick={() => toggleEditor()}
+            title={
+              editorMode === BridgeEditorMode.FIELDS_EDITOR
+                ? t("bridge.jsonEditor")
+                : t("bridge.formEditor")
+            }
+          >
+            {editorMode === BridgeEditorMode.FIELDS_EDITOR ? (
+              <TextFields />
+            ) : (
+              <LibraryBooks />
+            )}
+          </Button>
         </Box>
 
-        <Grid container spacing={2}>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <Button fullWidth variant="outlined" color="inherit" onClick={props.onCancel}>
-              Cancelar
-            </Button>
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
+        {editorMode === BridgeEditorMode.FIELDS_EDITOR && (
+          <FormEditor
+            value={config ?? {}}
+            onChange={onChange}
+            schema={bridgeConfigSchema}
+            uiSchema={{
+              icon: { "ui:widget": "hidden" },
+              featureFlags: { "ui:field": "featureFlags" },
+              filter: {
+                include: {
+                  "ui:options": {
+                    ArrayFieldTemplate: CompactArrayFieldTemplate,
+                  },
+                },
+                exclude: {
+                  "ui:options": {
+                    ArrayFieldTemplate: CompactArrayFieldTemplate,
+                  },
+                },
+              },
+            }}
+            customValidate={validatePort}
+            templates={{ ObjectFieldTemplate: BridgeObjectFieldTemplate }}
+            fields={{ featureFlags: FeatureFlagsField }}
+          />
+        )}
+
+        {editorMode === BridgeEditorMode.JSON_EDITOR && (
+          <JsonEditor
+            value={config ?? {}}
+            onChange={onChange}
+            schema={bridgeConfigSchema}
+            customValidate={validatePort}
+          />
+        )}
+
+        {(config as BridgeConfig)?.filter && (
+          <FilterPreview filter={(config as BridgeConfig).filter} />
+        )}
+
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+              {t("bridge.iconLabel")}
+            </Typography>
+            <BridgeIconUpload
+              bridgeId={props.bridgeId}
+              selectedIcon={(config as BridgeConfig)?.icon}
+              onIconChange={handleIconChange}
+            />
+          </CardContent>
+        </Card>
+
+        <Grid container>
+          <Grid size={{ xs: 6, sm: 4, md: 3 }}>
             <Button
               fullWidth
-              variant="contained"
+              variant="outlined"
+              color="error"
+              onClick={props.onCancel}
+            >
+              {t("common.cancel")}
+            </Button>
+          </Grid>
+          <Grid
+            size={{ xs: 0, sm: 4, md: 6 }}
+            sx={{ display: { xs: "none", sm: "block" } }}
+          />
+          <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+            <Button
+              fullWidth
+              variant="outlined"
               disabled={!isValid}
               onClick={saveAction}
             >
-              Guardar cambios
+              {t("common.save")}
             </Button>
           </Grid>
         </Grid>
       </Stack>
-    </Paper>
+    </>
   );
 };

@@ -8,7 +8,7 @@ import { mapValues, pickBy } from "lodash-es";
 import { describe, expect, it } from "vitest";
 import own from "../package.json" with { type: "json" };
 
-describe("home-assistant-matter-hub", () => {
+describe("nodalia-matter-hub", () => {
   it("should include all necessary dependencies", () => {
     const expected = pickBy(
       { ...backend.dependencies, ...common.dependencies },

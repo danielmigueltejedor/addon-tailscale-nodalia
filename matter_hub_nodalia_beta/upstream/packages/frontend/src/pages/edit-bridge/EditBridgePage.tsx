@@ -1,6 +1,7 @@
 import type { BridgeConfig } from "@home-assistant-matter-hub/common";
 import Stack from "@mui/material/Stack";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router";
 import { Breadcrumbs } from "../../components/breadcrumbs/Breadcrumbs.tsx";
 import { BridgeConfigEditor } from "../../components/bridge/BridgeConfigEditor.tsx";
@@ -13,6 +14,7 @@ import {
 import { navigation } from "../../routes.tsx";
 
 export const EditBridgePage = () => {
+  const { t } = useTranslation();
   const notifications = useNotifications();
   const navigate = useNavigate();
 
@@ -28,10 +30,11 @@ export const EditBridgePage = () => {
     return {
       name: bridge.name,
       port: bridge.port,
-      countryCode: bridge.countryCode,
       filter: bridge.filter,
-      featureFlags: bridge.featureFlags,
-      deviceIdentity: bridge.deviceIdentity,
+      ...(bridge.countryCode != null && { countryCode: bridge.countryCode }),
+      ...(bridge.featureFlags != null && { featureFlags: bridge.featureFlags }),
+      ...(bridge.icon != null && { icon: bridge.icon }),
+      ...(bridge.priority != null && { priority: bridge.priority }),
     };
   }, [isLoading, bridge]);
 
@@ -43,7 +46,7 @@ export const EditBridgePage = () => {
     await updateBridge({ ...config, id: bridgeId })
       .then(() =>
         notifications.show({
-          message: "Cambios guardados correctamente",
+          message: t("bridge.updateSuccess"),
           severity: "success",
         }),
       )
@@ -54,19 +57,19 @@ export const EditBridgePage = () => {
   };
 
   if (isLoading || !usedPorts) {
-    return "Cargando...";
+    return t("common.loading");
   }
   if (!bridge || !bridgeConfig) {
-    return "No encontrado";
+    return t("notFound.title");
   }
 
   return (
     <Stack spacing={4}>
       <Breadcrumbs
         items={[
-          { name: "Puentes", to: navigation.bridges },
+          { name: t("nav.bridges"), to: navigation.bridges },
           { name: bridge.name, to: navigation.bridge(bridgeId) },
-          { name: "Editar", to: navigation.editBridge(bridgeId) },
+          { name: t("common.edit"), to: navigation.editBridge(bridgeId) },
         ]}
       />
 

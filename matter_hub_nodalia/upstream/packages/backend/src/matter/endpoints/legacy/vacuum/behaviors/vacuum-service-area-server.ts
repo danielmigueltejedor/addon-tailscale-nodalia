@@ -1,749 +1,298 @@
-import { inspect } from "node:util";
-import {
-  type HomeAssistantEntityInformation,
-  VacuumState,
+import type {
+  CleanAreaRoom,
+  CustomServiceArea,
+  VacuumDeviceAttributes,
+  VacuumRoom,
 } from "@home-assistant-matter-hub/common";
-import { ServiceAreaServer as Base } from "@matter/main/behaviors/service-area";
-import { ServiceArea } from "@matter/main/clusters/service-area";
-import { HomeAssistantEntityBehavior } from "../../../../behaviors/home-assistant-entity-behavior.js";
+import { Logger } from "@matter/general";
+import type { ServiceArea } from "@matter/main/clusters";
 import {
-  parseVacuumServiceAreaData,
-  type VacuumServiceAreaArea,
-  type VacuumServiceAreaActionValue,
-  type VacuumServiceAreaData,
-} from "../service-area-data.js";
+  ServiceAreaServer,
+  ServiceAreaServerWithMaps,
+} from "../../../../behaviors/service-area-server.js";
+import { parseVacuumRooms } from "../utils/parse-vacuum-rooms.js";
 
-interface SelectAreasLike {
-  selectedAreas?: unknown;
-  newAreas?: unknown;
-  areaIds?: unknown;
-  selectedAreaIds?: unknown;
-  areas?: unknown;
+const logger = Logger.get("VacuumServiceAreaServer");
+
+/**
+ * Convert vacuum room ID to a Matter-compatible area ID.
+ * Room IDs from HA can be strings or numbers, but Matter requires uint32.
+ */
+function toAreaId(roomId: string | number): number {
+  if (typeof roomId === "number") {
+    return roomId;
+  }
+  // For string IDs, use a simple hash
+  let hash = 0;
+  for (let i = 0; i < roomId.length; i++) {
+    const char = roomId.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
 }
 
-interface SkipAreaLike {
-  skippedArea?: unknown;
-  area?: unknown;
-  areaId?: unknown;
+/**
+ * Extract unique maps (floors) from rooms that have mapName set.
+ * Returns an empty array when no rooms carry floor info.
+ */
+function extractMaps(rooms: VacuumRoom[]): ServiceArea.Map[] {
+  const seen = new Map<string, number>();
+  for (const room of rooms) {
+    if (room.mapName && !seen.has(room.mapName)) {
+      seen.set(room.mapName, seen.size + 1);
+    }
+  }
+  return Array.from(seen.entries()).map(([name, mapId]) => ({ mapId, name }));
 }
 
-const AREA_ID_KEYS = [
-  "areaId",
-  "area_id",
-  "id",
-  "value",
-  "segmentId",
-  "segment_id",
-  "roomId",
-  "room_id",
-] as const;
-
-interface MutableServiceAreaState {
-  supportedMaps: ServiceArea.Map[];
-  supportedAreas: ServiceArea.Area[];
-  selectedAreas: unknown[];
-  currentArea: number | null;
-  progress: ServiceArea.Progress[];
-}
-
-interface VacuumServiceAreaActionConfig {
-  action: string;
-  command?: string;
-  commandKey: string;
-  paramsKey: string;
-  paramsNested: boolean;
-}
-
-const DEFAULT_VACUUM_SERVICE_AREA_ACTION_CONFIG: VacuumServiceAreaActionConfig = {
-  action: "vacuum.send_command",
-  command: "app_segment_clean",
-  commandKey: "command",
-  paramsKey: "params",
-  paramsNested: false,
-};
-
-export class VacuumServiceAreaServerBase extends Base {
-  #data: VacuumServiceAreaData | undefined;
-  #actionConfig: VacuumServiceAreaActionConfig | undefined;
-  #actionValuesByAreaId = new Map<number, VacuumServiceAreaActionValue>();
-  #selectedMatterAreaIds: number[] = [];
-  #cachedSelectedAreasAction:
-    | { action: string; data: Record<string, unknown> }
-    | undefined;
-
-  private get supportsMaps(): boolean {
-    const features = this.features as Record<string, unknown>;
-    return features.maps === true;
+/**
+ * Convert VacuumRoom array to Matter ServiceArea.Area array.
+ * When maps are provided, each area's mapId is set to link it to its floor.
+ */
+function roomsToAreas(
+  rooms: VacuumRoom[],
+  maps: ServiceArea.Map[] = [],
+): ServiceArea.Area[] {
+  const mapLookup = new Map<string, number>();
+  for (const m of maps) {
+    mapLookup.set(m.name, m.mapId);
   }
 
-  private get supportsProgressReporting(): boolean {
-    const features = this.features as Record<string, unknown>;
-    return features.progressReporting === true;
-  }
-
-  override async initialize() {
-    this.ensureStateDefaults();
-
-    const homeAssistant = await this.agent.load(HomeAssistantEntityBehavior);
-    this.update(homeAssistant.entity);
-    this.reactTo(homeAssistant.onChange, this.update);
-    await super.initialize();
-  }
-
-  private ensureStateDefaults() {
-    const state = this.state as unknown as Partial<MutableServiceAreaState>;
-    if (this.supportsMaps && !Array.isArray(state.supportedMaps)) {
-      state.supportedMaps = [];
-    }
-    if (!Array.isArray(state.supportedAreas)) {
-      state.supportedAreas = [];
-    }
-    if (!Array.isArray(state.selectedAreas)) {
-      state.selectedAreas = [];
-    }
-    if (this.supportsProgressReporting && !Array.isArray(state.progress)) {
-      state.progress = [];
-    }
-    if (state.currentArea === undefined) {
-      state.currentArea = null;
-    }
-  }
-
-  private update(entity: HomeAssistantEntityInformation) {
-    this.ensureStateDefaults();
-    const state = this.state as unknown as MutableServiceAreaState;
-
-    const attributes = entity.state.attributes;
-    const parsedData = parseVacuumServiceAreaData(
-      attributes as Parameters<typeof parseVacuumServiceAreaData>[0],
-    );
-    const data = parsedData ?? this.#data ?? this.buildFallbackDataFromState();
-    const usingPreviousData = parsedData == null && this.#data != null;
-    const usingStateFallbackData =
-      parsedData == null && this.#data == null && data != null;
-
-    if (usingPreviousData) {
-      const selectedAreasFromState = this.getNormalizedStateSelectedAreaIds();
-      if (selectedAreasFromState.length > 0) {
-        this.setStoredSelectedAreas(selectedAreasFromState, "state-no-data");
-      }
-      console.debug(
-        "VacuumServiceArea retaining previous parsed data (current HA update has no room metadata)",
-      );
-    }
-
-    if (usingStateFallbackData) {
-      console.debug(
-        "VacuumServiceArea using fallback data from Matter state (HA attributes without room metadata)",
-      );
-    }
-
-    if (data == null) {
-      this.#data = undefined;
-      this.#actionValuesByAreaId.clear();
-      this.setStoredSelectedAreas([], "no-data");
-      if (this.supportsMaps) {
-        state.supportedMaps = [];
-      }
-      state.supportedAreas = [];
-      state.selectedAreas = [];
-      state.currentArea = null;
-      if (this.supportsProgressReporting) {
-        state.progress = [];
-      }
-      return;
-    }
-
-    this.#data = data;
-    this.#actionConfig = toActionConfig(data);
-    this.#actionValuesByAreaId.clear();
-
-    for (const area of data.areas) {
-      this.#actionValuesByAreaId.set(area.matterAreaId, area.actionValue);
-    }
-
-    const selectedAreasFromState = this.getNormalizedStateSelectedAreaIds();
-    if (selectedAreasFromState.length > 0) {
-      this.setStoredSelectedAreas(selectedAreasFromState, "state");
-    }
-
-    const supportedMaps = this.supportsMaps
-      ? data.maps.map((map) => ({
-          mapId: map.mapId,
-          name: map.name,
-        }))
-      : [];
-
-    const supportedAreas = data.areas.map((area) => ({
-      areaId: area.matterAreaId,
-      mapId: this.supportsMaps ? area.mapId : null,
-      areaInfo: {
-        locationInfo: {
-          locationName: area.name,
-          floorNumber: null,
-          areaType: null,
-        },
-        landmarkInfo: null,
+  return rooms.map((room) => ({
+    areaId: toAreaId(room.id),
+    mapId: room.mapName ? (mapLookup.get(room.mapName) ?? null) : null,
+    areaInfo: {
+      locationInfo: {
+        locationName: room.name,
+        floorNumber: null,
+        areaType: null,
       },
-    }));
-    disambiguateDuplicateAreaNames(supportedAreas);
+      landmarkInfo: null,
+    },
+  }));
+}
 
-    const selectedAreasFromAttributes = data.selectedMatterAreaIds.filter((areaId) =>
-      this.#actionValuesByAreaId.has(areaId),
-    );
+/**
+ * Build a lookup map from segment number to room name using room_mapping.
+ * room_mapping format: [[segmentId, cloudRoomId, roomName], ...]
+ */
+function buildRoomNameLookup(
+  attributes?: VacuumDeviceAttributes,
+): Map<number, string> {
+  const lookup = new Map<number, string>();
+  const mapping = attributes?.room_mapping;
+  if (!Array.isArray(mapping)) return lookup;
+
+  for (const entry of mapping) {
     if (
-      selectedAreasFromAttributes.length > 0 ||
-      this.#selectedMatterAreaIds.length === 0
+      Array.isArray(entry) &&
+      entry.length >= 3 &&
+      (typeof entry[0] === "number" || typeof entry[0] === "string") &&
+      typeof entry[2] === "string"
     ) {
-      this.setStoredSelectedAreas(selectedAreasFromAttributes, "attributes");
-    }
-
-    const selectedAreas = this.#selectedMatterAreaIds;
-    const isOperating = isOperatingVacuumState(entity.state.state);
-    const operatingAreaId = isOperating
-      ? data.currentMatterAreaId ??
-        (selectedAreas.length > 0 ? selectedAreas[0] : null)
-      : data.currentMatterAreaId ?? null;
-    const progress = selectedAreas.map((areaId) => ({
-      areaId,
-      status:
-        isOperating && operatingAreaId != null && areaId === operatingAreaId
-          ? ServiceArea.OperationalStatus.Operating
-          : ServiceArea.OperationalStatus.Pending,
-    }));
-
-    if (this.supportsMaps) {
-      state.supportedMaps = supportedMaps;
-    }
-    state.supportedAreas = supportedAreas;
-    state.selectedAreas = selectedAreas;
-    state.currentArea = operatingAreaId;
-    if (this.supportsProgressReporting) {
-      state.progress = progress;
-    }
-  }
-
-  override async selectAreas(
-    request: ServiceArea.SelectAreasRequest,
-  ): Promise<ServiceArea.SelectAreasResponse> {
-    const normalizedAreas = normalizeSelectedAreaIds(request);
-    if (normalizedAreas.length === 0) {
-      console.debug(
-        `VacuumServiceArea selectAreas received unparsable payload: ${inspect(request, { depth: 4, breakLength: 120 })}`,
-      );
-    }
-
-    const response = await super.selectAreas(
-      normalizedAreas.length > 0 ? { newAreas: normalizedAreas } : request,
-    );
-
-    if (response.status !== ServiceArea.SelectAreasStatus.Success) {
-      return response;
-    }
-
-    const selectedAreasFromState = this.getNormalizedStateSelectedAreaIds().filter(
-      (areaId) => this.isKnownAreaId(areaId),
-    );
-    const selectedAreasFromRequest = normalizedAreas.filter((areaId) =>
-      this.isKnownAreaId(areaId),
-    );
-    const selectedAreasFromRequestWithoutKnownFilter =
-      selectedAreasFromRequest.length > 0 ? selectedAreasFromRequest : normalizedAreas;
-    const selectedAreas =
-      selectedAreasFromState.length > 0
-        ? selectedAreasFromState
-        : selectedAreasFromRequestWithoutKnownFilter;
-
-    this.setStoredSelectedAreas(selectedAreas, "selectAreas");
-
-    const state = this.state as unknown as MutableServiceAreaState;
-    state.selectedAreas = selectedAreas;
-    this.#cachedSelectedAreasAction =
-      this.buildSelectedAreasActionFromIds(selectedAreas) ??
-      this.#cachedSelectedAreasAction;
-    console.debug(
-      `VacuumServiceArea selectAreas status=${response.status} selected=${JSON.stringify(this.#selectedMatterAreaIds)} normalized=${JSON.stringify(normalizedAreas)} fromState=${JSON.stringify(selectedAreasFromState)} fromRequest=${JSON.stringify(selectedAreasFromRequest)} supportedAreas=${JSON.stringify(this.getKnownSupportedAreaIds())}`,
-    );
-
-    return response;
-  }
-
-  getSelectedMatterAreaIds(): number[] {
-    return this.#selectedMatterAreaIds;
-  }
-
-  getSelectionDebugSnapshot(): {
-    selectedAreasFromState: number[];
-    storedSelectedAreas: number[];
-    knownSupportedAreas: number[];
-    knownActionValueAreas: number[];
-    hasData: boolean;
-    hasActionConfig: boolean;
-    hasCachedSelectedAreasAction: boolean;
-  } {
-    return {
-      selectedAreasFromState: this.getNormalizedStateSelectedAreaIds(),
-      storedSelectedAreas: this.getSelectedMatterAreaIds(),
-      knownSupportedAreas: this.getKnownSupportedAreaIds(),
-      knownActionValueAreas: [...this.#actionValuesByAreaId.keys()],
-      hasData: this.#data != null,
-      hasActionConfig: this.#actionConfig != null,
-      hasCachedSelectedAreasAction: this.#cachedSelectedAreasAction != null,
-    };
-  }
-
-  private setStoredSelectedAreas(areaIds: number[], source: string) {
-    const normalized = toUniqueAreaIds(areaIds);
-    if (areSameNumberArrays(this.#selectedMatterAreaIds, normalized)) {
-      return;
-    }
-    this.#selectedMatterAreaIds = normalized;
-    if (normalized.length === 0) {
-      this.#cachedSelectedAreasAction = undefined;
-    }
-    console.debug(
-      `VacuumServiceArea stored selected areas updated (${source}): ${JSON.stringify(this.#selectedMatterAreaIds)}`,
-    );
-  }
-
-  getSelectedAreasAction():
-    | { action: string; data: Record<string, unknown> }
-    | undefined {
-    const selectedAreaIdsFromState = this.getNormalizedStateSelectedAreaIds();
-    const selectedAreaIds =
-      selectedAreaIdsFromState.length > 0
-        ? selectedAreaIdsFromState
-        : this.getSelectedMatterAreaIds();
-
-    const selectedAction = this.buildSelectedAreasActionFromIds(selectedAreaIds);
-    if (selectedAction != null) {
-      this.#cachedSelectedAreasAction = selectedAction;
-      return selectedAction;
-    }
-
-    if (selectedAreaIds.length > 0 && this.#cachedSelectedAreasAction != null) {
-      console.debug(
-        `VacuumServiceArea using cached selected-areas action for ids ${JSON.stringify(selectedAreaIds)}`,
-      );
-      return this.#cachedSelectedAreasAction;
-    }
-
-    if (selectedAreaIds.length > 0) {
-      const debugSnapshot = this.getSelectionDebugSnapshot();
-      console.debug(
-        `VacuumServiceArea could not build selected-areas action for ids ${JSON.stringify(selectedAreaIds)} snapshot=${JSON.stringify(debugSnapshot)}`,
-      );
-    }
-
-    return undefined;
-  }
-
-  // Optional command: emulate skip by re-selecting areas except the skipped one.
-  override async skipArea(
-    request: ServiceArea.SkipAreaRequest,
-  ): Promise<ServiceArea.SkipAreaResponse> {
-    const skipResult = this.assertSkipServiceArea(request);
-    if (skipResult.status !== ServiceArea.SkipAreaStatus.Success) {
-      return skipResult;
-    }
-
-    const remainingAreas = this.getNormalizedStateSelectedAreaIds().filter(
-      (areaId) => areaId !== request.skippedArea,
-    );
-
-    const selectResult = await this.selectAreas({ newAreas: remainingAreas });
-    if (selectResult.status !== ServiceArea.SelectAreasStatus.Success) {
-      return {
-        status: ServiceArea.SkipAreaStatus.InvalidSkippedArea,
-        statusText: selectResult.statusText,
-      };
-    }
-
-    return {
-      status: ServiceArea.SkipAreaStatus.Success,
-      statusText: "",
-    };
-  }
-
-  private getNormalizedStateSelectedAreaIds(): number[] {
-    const state = this.state as unknown as Partial<MutableServiceAreaState>;
-    const selectedAreas = Array.isArray(state.selectedAreas)
-      ? state.selectedAreas
-      : [];
-    return toUniqueAreaIds(
-      selectedAreas
-        .map((areaId) => toNumber(areaId))
-        .filter((areaId): areaId is number => areaId != null),
-    );
-  }
-
-  private getKnownSupportedAreaIds(): number[] {
-    const state = this.state as unknown as Partial<MutableServiceAreaState>;
-    const supportedAreas = Array.isArray(state.supportedAreas)
-      ? state.supportedAreas
-      : [];
-    return toUniqueAreaIds(
-      supportedAreas
-        .map((area) =>
-          toNumber((area as unknown as { areaId?: unknown }).areaId),
-        )
-        .filter((areaId): areaId is number => areaId != null),
-    );
-  }
-
-  private isKnownAreaId(areaId: number): boolean {
-    return (
-      this.#actionValuesByAreaId.has(areaId) ||
-      this.getKnownSupportedAreaIds().includes(areaId)
-    );
-  }
-
-  private buildSelectedAreasActionFromIds(
-    selectedAreaIds: number[],
-  ): { action: string; data: Record<string, unknown> } | undefined {
-    if (selectedAreaIds.length === 0) {
-      return undefined;
-    }
-
-    const selectedAreaValues = selectedAreaIds
-      .map((areaId) => this.#actionValuesByAreaId.get(areaId) ?? areaId)
-      .filter(
-        (value): value is VacuumServiceAreaActionValue => value != null,
-      );
-
-    if (selectedAreaValues.length === 0) {
-      return undefined;
-    }
-
-    const actionConfig =
-      this.#actionConfig ??
-      (this.#data != null ? toActionConfig(this.#data) : undefined) ??
-      DEFAULT_VACUUM_SERVICE_AREA_ACTION_CONFIG;
-
-    if (this.#data == null) {
-      console.debug(
-        `VacuumServiceArea building selected-areas action without live data using action config ${JSON.stringify(actionConfig)}`,
-      );
-    }
-
-    return buildSelectAreasAction(actionConfig, selectedAreaValues);
-  }
-
-  private buildFallbackDataFromState(): VacuumServiceAreaData | undefined {
-    const state = this.state as unknown as Partial<MutableServiceAreaState>;
-    const supportedAreas = Array.isArray(state.supportedAreas)
-      ? state.supportedAreas
-      : [];
-
-    const areas = supportedAreas
-      .map((area) => {
-        const areaRecord = area as unknown as {
-          areaId?: unknown;
-          mapId?: unknown;
-          areaInfo?: {
-            locationInfo?: {
-              locationName?: unknown;
-            } | null;
-          } | null;
-        };
-
-        const matterAreaId = toNumber(areaRecord.areaId);
-        if (matterAreaId == null) {
-          return undefined;
-        }
-
-        const locationName = areaRecord.areaInfo?.locationInfo?.locationName;
-        const name =
-          typeof locationName === "string" && locationName.trim().length > 0
-            ? locationName
-            : `Area ${matterAreaId}`;
-
-        const mapId = toNumber(areaRecord.mapId) ?? 1;
-        const fallbackArea: VacuumServiceAreaArea = {
-          matterAreaId,
-          segmentId: matterAreaId,
-          actionValue: matterAreaId,
-          mapId,
-          name,
-        };
-
-        return fallbackArea;
-      })
-      .filter((area): area is VacuumServiceAreaArea => area != null);
-
-    if (areas.length === 0) {
-      return undefined;
-    }
-
-    const mapIds = [...new Set(areas.map((area) => area.mapId))].sort(
-      (left, right) => left - right,
-    );
-    const maps = mapIds.map((mapId) => ({
-      mapId,
-      name: mapIds.length === 1 ? "Map" : `Map ${mapId}`,
-    }));
-
-    const selectedMatterAreaIds = this.getNormalizedStateSelectedAreaIds();
-    const currentMatterAreaId = toNumber(state.currentArea);
-    const actionConfig =
-      this.#actionConfig ?? DEFAULT_VACUUM_SERVICE_AREA_ACTION_CONFIG;
-
-    return {
-      maps,
-      areas,
-      selectedMatterAreaIds,
-      currentMatterAreaId,
-      action: actionConfig.action,
-      command: actionConfig.command,
-      commandKey: actionConfig.commandKey,
-      paramsKey: actionConfig.paramsKey,
-      paramsNested: actionConfig.paramsNested,
-    };
-  }
-}
-
-export const VacuumServiceAreaServer = VacuumServiceAreaServerBase.with(
-  ServiceArea.Feature.Maps,
-  ServiceArea.Feature.ProgressReporting,
-).set({});
-
-export function createVacuumServiceAreaServer(): object {
-  return VacuumServiceAreaServer;
-}
-
-function toActionConfig(
-  data: VacuumServiceAreaData,
-): VacuumServiceAreaActionConfig {
-  return {
-    action: data.action,
-    command: data.command,
-    commandKey: data.commandKey,
-    paramsKey: data.paramsKey,
-    paramsNested: data.paramsNested,
-  };
-}
-
-function buildSelectAreasAction(
-  config: VacuumServiceAreaActionConfig,
-  selectedAreaValues: VacuumServiceAreaActionValue[],
-): { action: string; data: Record<string, unknown> } {
-  const payload: Record<string, unknown> = {
-    [config.paramsKey]: config.paramsNested
-      ? [selectedAreaValues]
-      : selectedAreaValues,
-  };
-
-  if (config.command != null) {
-    payload[config.commandKey] = config.command;
-  }
-
-  return {
-    action: config.action,
-    data: payload,
-  };
-}
-
-export function normalizeSelectedAreaIds(request: unknown): number[] {
-  if (Array.isArray(request)) {
-    return toUniqueAreaIds(request.flatMap((value) => extractAreaIds(value)));
-  }
-
-  if (request != null && typeof request === "object") {
-    const payload = request as SelectAreasLike;
-    const selected =
-      payload.selectedAreas ??
-      payload.newAreas ??
-      payload.areaIds ??
-      payload.selectedAreaIds ??
-      payload.areas;
-
-    if (selected != null) {
-      return toUniqueAreaIds(extractAreaIds(selected));
-    }
-
-    return toUniqueAreaIds(extractAreaIds(payload));
-  }
-
-  return [];
-}
-
-export function normalizeSkippedAreaId(request: unknown): number | undefined {
-  if (request != null && typeof request === "object") {
-    const payload = request as SkipAreaLike;
-    const skippedArea = payload.skippedArea ?? payload.area ?? payload.areaId;
-    const skippedAreaId = extractAreaId(skippedArea);
-    if (skippedAreaId != null) {
-      return skippedAreaId;
-    }
-  }
-
-  return extractAreaId(request);
-}
-
-function extractAreaIds(value: unknown): number[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => extractAreaId(entry))
-      .filter((entry): entry is number => entry != null);
-  }
-
-  if (isIterable(value)) {
-    return toUniqueAreaIds(
-      [...value]
-        .map((entry) => extractAreaId(entry))
-        .filter((entry): entry is number => entry != null),
-    );
-  }
-
-  if (isArrayLike(value)) {
-    return toUniqueAreaIds(
-      Array.from(value)
-        .map((entry) => extractAreaId(entry))
-        .filter((entry): entry is number => entry != null),
-    );
-  }
-
-  const areaId = extractAreaId(value);
-  return areaId != null ? [areaId] : [];
-}
-
-function extractAreaId(value: unknown): number | undefined {
-  const direct = toNumber(value);
-  if (direct != null) {
-    return direct;
-  }
-
-  if (value == null || typeof value !== "object") {
-    return undefined;
-  }
-
-  const record = value as Record<string, unknown>;
-
-  for (const key of AREA_ID_KEYS) {
-    const numeric = toNumber(record[key]);
-    if (numeric != null) {
-      return numeric;
-    }
-  }
-
-  const nestedCandidates = [
-    record.area,
-    record.areaInfo,
-    record.selectedArea,
-    record.newArea,
-    record.skippedArea,
-    record.targetArea,
-  ];
-
-  for (const candidate of nestedCandidates) {
-    const nested = extractAreaId(candidate);
-    if (nested != null) {
-      return nested;
-    }
-  }
-
-  return undefined;
-}
-
-function isOperatingVacuumState(state: unknown): boolean {
-  return state === VacuumState.cleaning || state === "cleaning";
-}
-
-function toUniqueAreaIds(values: number[]): number[] {
-  return [...new Set(values)];
-}
-
-function areSameNumberArrays(left: number[], right: number[]): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function toNumber(value: unknown): number | undefined {
-  if (value != null && typeof value === "object") {
-    const valueOf = (value as { valueOf?: () => unknown }).valueOf;
-    if (typeof valueOf === "function") {
-      const primitive = valueOf.call(value);
-      if (primitive !== value) {
-        const parsedPrimitive = toNumber(primitive);
-        if (parsedPrimitive != null) {
-          return parsedPrimitive;
-        }
+      const segId =
+        typeof entry[0] === "number"
+          ? entry[0]
+          : Number.parseInt(String(entry[0]), 10);
+      if (!Number.isNaN(segId)) {
+        lookup.set(segId, entry[2]);
       }
     }
   }
-
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "bigint") {
-    const asNumber = Number(value);
-    return Number.isFinite(asNumber) ? asNumber : undefined;
-  }
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return undefined;
+  return lookup;
 }
 
-function isIterable(value: unknown): value is Iterable<unknown> {
-  if (value == null || typeof value === "string") {
-    return false;
+/**
+ * Convert button entity IDs to VacuumRoom array.
+ * First tries to resolve names from room_mapping (Roborock segment -> name mapping),
+ * then falls back to parsing the entity ID.
+ * Example: "button.roborock_s6_6b8e_segment_18" + room_mapping -> { id: "...", name: "Badrum" }
+ */
+function buttonEntitiesToRooms(
+  entityIds: string[],
+  attributes?: VacuumDeviceAttributes,
+): VacuumRoom[] {
+  const nameLookup = buildRoomNameLookup(attributes);
+
+  return entityIds.map((entityId) => {
+    // Try to extract segment number and look up in room_mapping
+    const segmentMatch = entityId.match(/segment[_-]?(\d+)$/);
+    if (segmentMatch && nameLookup.size > 0) {
+      const segId = Number.parseInt(segmentMatch[1], 10);
+      const name = nameLookup.get(segId);
+      if (name) {
+        return { id: entityId, name };
+      }
+    }
+
+    // Fallback: extract name from entity ID
+    const parts = entityId.split(".");
+    const lastPart = parts[parts.length - 1] || entityId;
+    // Remove common prefixes like "roborock_clean_", "vacuum_", etc.
+    const cleanName = lastPart
+      .replace(/^(roborock_|vacuum_|clean_|room_)+/i, "")
+      .replace(/_/g, " ")
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+
+    return {
+      id: entityId, // Use full entity ID as room ID for button press
+      name: cleanName || lastPart,
+    };
+  });
+}
+
+/**
+ * Create a VacuumServiceAreaServer with initial supportedAreas.
+ * The areas MUST be provided at creation time for Matter.js initialization.
+ * All state is set at creation time.
+ *
+ * Note: selectAreas only stores selected areas. Actual cleaning starts when
+ * RvcRunMode.changeToMode(Cleaning) is called - the RvcRunModeServer reads
+ * the selectedAreas from ServiceArea state and triggers the appropriate
+ * vacuum service (dreame_vacuum.vacuum_clean_segment or vacuum.send_command).
+ *
+ * @param attributes - Vacuum device attributes
+ * @param roomEntities - Optional array of button entity IDs for room-based cleaning (Roborock)
+ * @param includeUnnamedRooms - If true, includes rooms with generic names like "Room 7". Default: false
+ */
+export function createVacuumServiceAreaServer(
+  attributes: VacuumDeviceAttributes,
+  roomEntities?: string[],
+  includeUnnamedRooms = false,
+) {
+  let rooms: VacuumRoom[];
+
+  // Prefer button entities if provided (Roborock integration)
+  if (roomEntities && roomEntities.length > 0) {
+    rooms = buttonEntitiesToRooms(roomEntities, attributes);
+    logger.info(
+      `Using ${rooms.length} button entities as rooms: ${rooms.map((r) => r.name).join(", ")}`,
+    );
+  } else {
+    // Fallback to parsing rooms from vacuum attributes (Dreame, Xiaomi Miot, etc.)
+    rooms = parseVacuumRooms(attributes, includeUnnamedRooms);
+    if (rooms.length > 0) {
+      logger.info(
+        `Using ${rooms.length} rooms from attributes: ${rooms.map((r) => r.name).join(", ")}`,
+      );
+    }
   }
 
-  return (
-    typeof value === "object" &&
-    typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] ===
-      "function"
+  const maps = extractMaps(rooms);
+  const supportedAreas = roomsToAreas(rooms, maps);
+
+  if (maps.length > 0) {
+    return ServiceAreaServerWithMaps({
+      supportedAreas,
+      supportedMaps: maps,
+      selectedAreas: [],
+      currentArea: null,
+    });
+  }
+
+  return ServiceAreaServer({
+    supportedAreas,
+    selectedAreas: [],
+    currentArea: null,
+  });
+}
+
+/**
+ * Create a default ServiceAreaServer with a single "Home" area.
+ * Used when no rooms are available from vacuum attributes or entity mapping.
+ */
+export function createDefaultServiceAreaServer() {
+  return ServiceAreaServer({
+    supportedAreas: [
+      {
+        areaId: 1,
+        mapId: null,
+        areaInfo: {
+          locationInfo: {
+            locationName: "Home",
+            floorNumber: null,
+            areaType: null,
+          },
+          landmarkInfo: null,
+        },
+      },
+    ],
+    selectedAreas: [],
+    currentArea: null,
+  });
+}
+
+/**
+ * Create a ServiceAreaServer from user-defined custom service areas.
+ * Each area maps to a custom HA service call (e.g., script.mow_zone_1).
+ * Area IDs are assigned sequentially starting from 1.
+ *
+ * @param customAreas - Array of custom service area definitions from entity mapping config
+ */
+export function createCustomServiceAreaServer(
+  customAreas: CustomServiceArea[],
+) {
+  const supportedAreas: ServiceArea.Area[] = customAreas.map((area, index) => ({
+    areaId: index + 1,
+    mapId: null,
+    areaInfo: {
+      locationInfo: {
+        locationName: area.name,
+        floorNumber: null,
+        areaType: null,
+      },
+      landmarkInfo: null,
+    },
+  }));
+
+  logger.info(
+    `Using ${customAreas.length} custom service areas: ${customAreas.map((a) => a.name).join(", ")}`,
   );
+
+  return ServiceAreaServer({
+    supportedAreas,
+    selectedAreas: [],
+    currentArea: null,
+  });
 }
 
-function isArrayLike(value: unknown): value is ArrayLike<unknown> {
-  if (value == null || typeof value === "string") {
-    return false;
-  }
+/**
+ * Create a ServiceAreaServer from HA areas resolved via CLEAN_AREA mapping.
+ * Each area corresponds to an HA area that the user has mapped vacuum segments to.
+ * When cleaning is triggered, the RvcRunModeServer calls vacuum.clean_area
+ * with the corresponding HA area IDs.
+ */
+export function createCleanAreaServiceAreaServer(
+  cleanAreaRooms: CleanAreaRoom[],
+) {
+  const supportedAreas: ServiceArea.Area[] = cleanAreaRooms.map((room) => ({
+    areaId: room.areaId,
+    mapId: null,
+    areaInfo: {
+      locationInfo: {
+        locationName: room.name,
+        floorNumber: null,
+        areaType: null,
+      },
+      landmarkInfo: null,
+    },
+  }));
 
-  if (Array.isArray(value) || isIterable(value)) {
-    return false;
-  }
+  logger.info(
+    `Using ${cleanAreaRooms.length} HA areas via CLEAN_AREA: ${cleanAreaRooms.map((r) => r.name).join(", ")}`,
+  );
 
-  if (typeof value !== "object") {
-    return false;
-  }
-
-  const length = (value as { length?: unknown }).length;
-  return typeof length === "number" && Number.isFinite(length) && length >= 0;
+  return ServiceAreaServer({
+    supportedAreas,
+    selectedAreas: [],
+    currentArea: null,
+  });
 }
 
-function disambiguateDuplicateAreaNames(areas: ServiceArea.Area[]) {
-  const counts = new Map<string, number>();
-  for (const area of areas) {
-    const locationName = area.areaInfo.locationInfo?.locationName ?? "";
-    const key = `${area.mapId}:${locationName}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  for (const area of areas) {
-    const locationInfo = area.areaInfo.locationInfo;
-    if (locationInfo == null) {
-      continue;
-    }
-
-    const key = `${area.mapId}:${locationInfo.locationName}`;
-    if ((counts.get(key) ?? 0) > 1) {
-      area.areaInfo.locationInfo = {
-        ...locationInfo,
-        locationName: `${locationInfo.locationName} (${area.areaId})`,
-      };
-    }
-  }
-}
+/**
+ * Export toAreaId for use by RvcRunModeServer to convert area IDs back to room IDs
+ */
+export { toAreaId };

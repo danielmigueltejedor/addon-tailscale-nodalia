@@ -27,7 +27,17 @@ async function buildBackend() {
     minify: false,
     sourcemap: "linked",
     plugins: [
-      externalizeAllPackagesExcept(["@home-assistant-matter-hub/common"]),
+      stubBunImports(),
+      externalizeAllPackagesExcept([
+        "@home-assistant-matter-hub/common",
+        "@matter/general",
+        "@matter/main",
+        "@matter/model",
+        "@matter/node",
+        "@matter/nodejs",
+        "@matter/protocol",
+        "@matter/types",
+      ]),
       doNotBundleFile(src, ["bootstrap.js"]),
     ],
   });
@@ -57,6 +67,24 @@ function doNotBundleFile(sourcesRoot, files) {
           return;
         }
         return { path: args.path, external: true };
+      });
+    },
+  };
+}
+
+function stubBunImports() {
+  return {
+    name: "stubBunImports",
+    setup(build) {
+      // Stub out bun: protocol imports with empty modules
+      build.onResolve({ filter: /^bun(:|$)/ }, (args) => {
+        return { path: args.path, namespace: "bun-stub" };
+      });
+      build.onLoad({ filter: /.*/, namespace: "bun-stub" }, () => {
+        return {
+          contents: "export default {}; export const Database = class {};",
+          loader: "js",
+        };
       });
     },
   };

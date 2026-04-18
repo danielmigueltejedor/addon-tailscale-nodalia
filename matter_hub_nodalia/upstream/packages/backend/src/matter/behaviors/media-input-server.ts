@@ -17,13 +17,16 @@ class MediaInputServerBase extends Base {
   declare state: MediaInputServerBase.State;
 
   override async initialize() {
-    super.initialize();
+    await super.initialize();
     const homeAssistant = await this.agent.load(HomeAssistantEntityBehavior);
     this.update(homeAssistant.entity);
     this.reactTo(homeAssistant.onChange, this.update);
   }
 
   private update(entity: HomeAssistantEntityInformation) {
+    if (!entity.state || !entity.state.attributes) {
+      return;
+    }
     const config = this.state.config;
     let source_idx = 0;
     const sourceList = config.getSourceList(entity.state, this.agent)?.sort();

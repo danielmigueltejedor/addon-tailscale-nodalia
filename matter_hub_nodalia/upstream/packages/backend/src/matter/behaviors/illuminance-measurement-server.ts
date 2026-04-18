@@ -16,15 +16,24 @@ class IlluminanceMeasurementServerBase extends Base {
   declare state: IlluminanceMeasurementServerBase.State;
 
   override async initialize() {
-    super.initialize();
+    await super.initialize();
     const homeAssistant = await this.agent.load(HomeAssistantEntityBehavior);
     this.update(homeAssistant.entity);
     this.reactTo(homeAssistant.onChange, this.update);
   }
 
   private update(entity: HomeAssistantEntityInformation) {
+    if (!entity.state || !entity.state.attributes) {
+      return;
+    }
     const illuminance = this.getIlluminance(this.state.config, entity.state);
-    applyPatchState(this.state, { measuredValue: illuminance });
+    applyPatchState(this.state, {
+      measuredValue: illuminance,
+      // min/max values: 1 (min valid) to 0xFFFE (max illuminance in log scale)
+      // Matter spec requires minMeasuredValue >= 1 for IlluminanceMeasurement
+      minMeasuredValue: 1,
+      maxMeasuredValue: 0xfffe,
+    });
   }
 
   private getIlluminance(

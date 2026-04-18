@@ -1,5 +1,6 @@
 import {
   ClusterId,
+  type EntityMappingConfig,
   type HomeAssistantEntityInformation,
 } from "@home-assistant-matter-hub/common";
 import { Behavior, EventEmitter } from "@matter/main";
@@ -34,16 +35,26 @@ export class HomeAssistantEntityBehavior extends Behavior {
     );
   }
 
-  callAction(action: HomeAssistantAction | readonly HomeAssistantAction[]) {
+  callAction(action: HomeAssistantAction) {
     const actions = this.env.get(HomeAssistantActions);
-    const actionList = Array.isArray(action) ? [...action] : [action];
-    actionList.forEach((entry) => actions.call(entry, this.entityId));
+    actions.call(action, this.entityId);
+  }
+
+  fireEvent(eventType: string, eventData?: Record<string, unknown>) {
+    const actions = this.env.get(HomeAssistantActions);
+    actions.fireEvent(eventType, {
+      entity_id: this.entityId,
+      ...eventData,
+    });
   }
 }
 
 export namespace HomeAssistantEntityBehavior {
   export class State {
     entity!: HomeAssistantEntityInformation;
+    customName?: string;
+    /** Entity mapping configuration (optional, used for advanced features like filter life sensor) */
+    mapping?: EntityMappingConfig;
   }
 
   export class Events extends EventEmitter {

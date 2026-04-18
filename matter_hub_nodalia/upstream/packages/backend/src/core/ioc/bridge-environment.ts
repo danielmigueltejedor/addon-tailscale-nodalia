@@ -1,437 +1,153 @@
-import type {
-  BridgeData,
-  HomeAssistantDeviceRegistry,
-} from "@home-assistant-matter-hub/common";
+import type { BridgeData } from "@home-assistant-matter-hub/common";
 import type { Environment, Logger } from "@matter/general";
+import { ServerModeServerNode } from "../../matter/endpoints/server-mode-server-node.js";
+import { PluginInstaller } from "../../plugins/plugin-installer.js";
+import { PluginManager } from "../../plugins/plugin-manager.js";
+import { PluginRegistry } from "../../plugins/plugin-registry.js";
 import { Bridge } from "../../services/bridges/bridge.js";
 import { BridgeDataProvider } from "../../services/bridges/bridge-data-provider.js";
 import { BridgeEndpointManager } from "../../services/bridges/bridge-endpoint-manager.js";
 import { BridgeFactory } from "../../services/bridges/bridge-factory.js";
 import { BridgeRegistry } from "../../services/bridges/bridge-registry.js";
+import { EntityStateProvider } from "../../services/bridges/entity-state-provider.js";
+import { ServerModeBridge } from "../../services/bridges/server-mode-bridge.js";
+import { ServerModeEndpointManager } from "../../services/bridges/server-mode-endpoint-manager.js";
 import { HomeAssistantClient } from "../../services/home-assistant/home-assistant-client.js";
 import { HomeAssistantRegistry } from "../../services/home-assistant/home-assistant-registry.js";
+import { EntityMappingStorage } from "../../services/storage/entity-mapping-storage.js";
 import { LoggerService } from "../app/logger.js";
 import type { AppEnvironment } from "./app-environment.js";
 import { EnvironmentBase } from "./environment-base.js";
 
 export class BridgeEnvironment extends EnvironmentBase {
-  static async create(parent: Environment, initialData: BridgeData) {
-    const bridge = new BridgeEnvironment(parent, initialData);
+  static async create(
+    parent: Environment,
+    initialData: BridgeData,
+    storageLocation?: string,
+  ) {
+    const bridge = new BridgeEnvironment(parent, initialData, storageLocation);
     await bridge.construction;
     return bridge;
   }
 
   private readonly construction: Promise<void>;
   private readonly endpointManagerLogger: Logger;
+  private readonly storageLocation?: string;
 
-  private constructor(parent: Environment, initialData: BridgeData) {
+  private constructor(
+    parent: Environment,
+    initialData: BridgeData,
+    storageLocation?: string,
+  ) {
     const loggerService = parent.get(LoggerService);
     const log = loggerService.get(`BridgeEnvironment / ${initialData.id}`);
 
     super({ id: initialData.id, parent, log });
     this.endpointManagerLogger = loggerService.get("BridgeEndpointManager");
+    this.storageLocation = storageLocation;
     this.construction = this.init();
 
     this.set(BridgeDataProvider, new BridgeDataProvider(initialData));
   }
 
   private async init() {
-    const homeAssistantRegistry = await this.load(HomeAssistantRegistry);
-    const dataProvider = this.get(BridgeDataProvider);
-    const bridgeRegistry = new BridgeRegistry(homeAssistantRegistry, dataProvider);
-    applyAutoDeviceIdentityFromSingleDevice(
-      homeAssistantRegistry,
-      bridgeRegistry,
-      dataProvider,
-    );
+    const haRegistry = await this.load(HomeAssistantRegistry);
+    const haClient = await this.load(HomeAssistantClient);
 
     this.set(
       BridgeRegistry,
-      bridgeRegistry,
+      new BridgeRegistry(haRegistry, this.get(BridgeDataProvider), haClient),
     );
+    this.set(EntityStateProvider, new EntityStateProvider(haRegistry));
+
+    const bridgeId = this.get(BridgeDataProvider).id;
+    let pluginManager: PluginManager | undefined;
+    let pluginRegistry: PluginRegistry | undefined;
+    let pluginInstaller: PluginInstaller | undefined;
+    if (this.storageLocation) {
+      pluginManager = new PluginManager(bridgeId, this.storageLocation);
+      pluginRegistry = new PluginRegistry(this.storageLocation);
+      pluginManager.setRegistry(pluginRegistry);
+      pluginInstaller = new PluginInstaller(this.storageLocation);
+    }
+
     this.set(
       BridgeEndpointManager,
       new BridgeEndpointManager(
         await this.load(HomeAssistantClient),
         this.get(BridgeRegistry),
+        await this.load(EntityMappingStorage),
+        bridgeId,
         this.endpointManagerLogger,
+        pluginManager,
+        pluginRegistry,
+        pluginInstaller,
       ),
     );
   }
 }
 
-function applyAutoDeviceIdentityFromSingleDevice(
-  homeAssistantRegistry: HomeAssistantRegistry,
-  bridgeRegistry: BridgeRegistry,
-  dataProvider: BridgeDataProvider,
-) {
-  const exposedEntityIds = bridgeRegistry.entityIds;
-  if (exposedEntityIds.length === 0) {
-    return;
+/**
+ * ServerModeEnvironment is a lightweight environment for server mode bridges.
+ * It does NOT create a BridgeEndpointManager since server mode uses
+ * ServerModeEndpointManager instead.
+ */
+export class ServerModeEnvironment extends EnvironmentBase {
+  static async create(parent: Environment, initialData: BridgeData) {
+    const env = new ServerModeEnvironment(parent, initialData);
+    await env.construction;
+    return env;
   }
 
-  const exposedDeviceIds = Array.from(
-    new Set(
-      exposedEntityIds
-        .map((entityId) => bridgeRegistry.entity(entityId)?.device_id)
-        .filter((deviceId): deviceId is string => deviceId != null),
-    ),
-  );
+  private readonly construction: Promise<void>;
 
-  if (exposedDeviceIds.length !== 1) {
-    return;
+  private constructor(parent: Environment, initialData: BridgeData) {
+    const loggerService = parent.get(LoggerService);
+    const log = loggerService.get(`ServerModeEnvironment / ${initialData.id}`);
+
+    super({ id: initialData.id, parent, log });
+    this.construction = this.init();
+
+    this.set(BridgeDataProvider, new BridgeDataProvider(initialData));
   }
 
-  const primaryEntityId = selectPrimaryEntityId(exposedEntityIds);
-  if (primaryEntityId == null) {
-    return;
-  }
+  private async init() {
+    const haRegistry = await this.load(HomeAssistantRegistry);
+    const haClient = await this.load(HomeAssistantClient);
 
-  const primaryEntity = bridgeRegistry.entity(primaryEntityId);
-  if (primaryEntity == null) {
-    return;
-  }
-
-  const deviceId = exposedDeviceIds[0];
-  const device = homeAssistantRegistry.devices[deviceId];
-  const state = homeAssistantRegistry.states[primaryEntityId];
-  const attributes = asRecord(state?.attributes);
-  const relatedSoftwareVersion = resolveRelatedSoftwareVersion(
-    homeAssistantRegistry,
-    deviceId,
-    primaryEntityId,
-  );
-  const relatedSerialNumber = resolveRelatedSerialNumber(
-    homeAssistantRegistry,
-    deviceId,
-    primaryEntityId,
-  );
-  const vendorName = firstNonEmpty(
-    toStringValue(attributes.matter_vendor_name),
-    toStringValue(attributes.vendor_name),
-    toStringValue(attributes.manufacturer),
-    toStringValue(attributes.brand),
-    device?.manufacturer,
-    device?.default_manufacturer,
-  );
-  const productName = resolveProductName(device, attributes, vendorName);
-  const productLabel = firstNonEmpty(
-    toStringValue(attributes.matter_product_label),
-    toStringValue(attributes.product_label),
-    toStringValue(attributes.friendly_name),
-    device?.name_by_user,
-    device?.name,
-    productName,
-  );
-  const serialNumber = firstNonEmpty(
-    toSerialStringValue(attributes.serial_number),
-    toSerialStringValue(attributes.serialNumber),
-    toSerialStringValue(attributes.device_serial_number),
-    toSerialStringValue(attributes.sn),
-    toSerialStringValue(device?.serial_number),
-    relatedSerialNumber,
-  );
-  const softwareVersionString = firstNonEmpty(
-    toVersionStringValue(attributes.sw_version),
-    toVersionStringValue(attributes.software_version),
-    toVersionStringValue(attributes.firmware_version),
-    relatedSoftwareVersion,
-    toVersionStringValue(device?.sw_version),
-    toFirmwareLikeVersionValue(attributes.version),
-  );
-
-  dataProvider.mergeDeviceIdentityDefaults({
-    vendorName,
-    productName,
-    productLabel,
-    serialNumber,
-    softwareVersionString,
-  });
-}
-
-function selectPrimaryEntityId(entityIds: string[]): string | undefined {
-  const preferredDomains = [
-    "vacuum",
-    "climate",
-    "light",
-    "cover",
-    "fan",
-    "switch",
-    "lock",
-    "media_player",
-  ];
-
-  for (const domain of preferredDomains) {
-    const preferred = entityIds.find((entityId) => entityId.startsWith(`${domain}.`));
-    if (preferred != null) {
-      return preferred;
-    }
-  }
-  return entityIds[0];
-}
-
-function resolveProductName(
-  device: HomeAssistantDeviceRegistry | undefined,
-  attributes: Record<string, unknown>,
-  vendorName: string | undefined,
-): string | undefined {
-  const humanName = stripVendorPrefix(
-    firstNonEmpty(
-      toStringValue(attributes.friendly_name),
-      device?.name_by_user,
-      device?.name,
-    ),
-    vendorName,
-  );
-  const modelName = firstNonEmpty(
-    toStringValue(attributes.matter_product_name),
-    toStringValue(attributes.product_name),
-    toStringValue(attributes.model_name),
-    toStringValue(attributes.model),
-    toStringValue(attributes.device_model),
-    device?.model,
-    device?.default_model,
-    device?.model_id,
-  );
-
-  if (modelName == null) {
-    return humanName;
-  }
-  if (isLikelyOpaqueModelName(modelName) && humanName != null) {
-    return humanName;
-  }
-  return modelName;
-}
-
-function resolveRelatedSoftwareVersion(
-  homeAssistantRegistry: HomeAssistantRegistry,
-  deviceId: string,
-  primaryEntityId: string,
-): string | undefined {
-  for (const entity of Object.values(homeAssistantRegistry.entities)) {
-    if (entity.device_id !== deviceId || entity.entity_id === primaryEntityId) {
-      continue;
-    }
-
-    const state = homeAssistantRegistry.states[entity.entity_id];
-    if (state == null) {
-      continue;
-    }
-
-    const attributes = asRecord(state.attributes);
-    const [domain] = entity.entity_id.split(".");
-
-    if (domain === "update") {
-      const updateVersion = firstNonEmpty(
-        toVersionStringValue(attributes.installed_version),
-        toVersionStringValue(attributes.latest_version),
-        toVersionStringValue(attributes.current_version),
-        toVersionStringValue(state.state),
-      );
-      if (updateVersion != null) {
-        return updateVersion;
-      }
-    }
-
-    if (
-      !isLikelySoftwareVersionEntity(
-        entity.entity_id,
-        toStringValue(attributes.friendly_name),
-      )
-    ) {
-      continue;
-    }
-
-    const version = firstNonEmpty(
-      toVersionStringValue(attributes.sw_version),
-      toVersionStringValue(attributes.software_version),
-      toVersionStringValue(attributes.firmware_version),
-      toFirmwareLikeVersionValue(attributes.version),
-      toFirmwareLikeVersionValue(state.state),
+    this.set(
+      BridgeRegistry,
+      new BridgeRegistry(haRegistry, this.get(BridgeDataProvider), haClient),
     );
-    if (version != null) {
-      return version;
-    }
+    this.set(EntityStateProvider, new EntityStateProvider(haRegistry));
+    // Note: No BridgeEndpointManager - server mode uses ServerModeEndpointManager
   }
-
-  return undefined;
-}
-
-function resolveRelatedSerialNumber(
-  homeAssistantRegistry: HomeAssistantRegistry,
-  deviceId: string,
-  primaryEntityId: string,
-): string | undefined {
-  for (const entity of Object.values(homeAssistantRegistry.entities)) {
-    if (entity.device_id !== deviceId || entity.entity_id === primaryEntityId) {
-      continue;
-    }
-
-    const state = homeAssistantRegistry.states[entity.entity_id];
-    if (state == null) {
-      continue;
-    }
-
-    const attributes = asRecord(state.attributes);
-    if (
-      !isLikelySerialEntity(
-        entity.entity_id,
-        toStringValue(attributes.friendly_name),
-      )
-    ) {
-      continue;
-    }
-
-    const serial = firstNonEmpty(
-      toSerialStringValue(attributes.serial_number),
-      toSerialStringValue(attributes.serialNumber),
-      toSerialStringValue(attributes.device_serial_number),
-      toSerialStringValue(attributes.sn),
-      toSerialStringValue(state.state),
-    );
-    if (serial != null) {
-      return serial;
-    }
-  }
-
-  return undefined;
-}
-
-function isLikelySoftwareVersionEntity(
-  entityId: string,
-  friendlyName: string | undefined,
-): boolean {
-  const normalized = `${entityId} ${friendlyName ?? ""}`.toLowerCase();
-  return (
-    normalized.includes("firmware") ||
-    normalized.includes("software") ||
-    normalized.includes("version") ||
-    normalized.includes("versi") ||
-    normalized.includes("sw_version") ||
-    normalized.includes("fw_version")
-  );
-}
-
-function isLikelySerialEntity(
-  entityId: string,
-  friendlyName: string | undefined,
-): boolean {
-  const normalized = `${entityId} ${friendlyName ?? ""}`.toLowerCase();
-  return (
-    normalized.includes("serial") ||
-    normalized.includes("serie") ||
-    normalized.includes("sn")
-  );
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value == null || typeof value !== "object") {
-    return {};
-  }
-  return value as Record<string, unknown>;
-}
-
-function toStringValue(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : undefined;
-}
-
-function toVersionStringValue(value: unknown): string | undefined {
-  const normalized = toStringValue(value);
-  if (normalized == null) {
-    return undefined;
-  }
-  if (!/[0-9]/.test(normalized)) {
-    return undefined;
-  }
-  if (/^(unknown|unavailable|none|null|on|off)$/i.test(normalized)) {
-    return undefined;
-  }
-  return normalized;
-}
-
-function toFirmwareLikeVersionValue(value: unknown): string | undefined {
-  const normalized = toVersionStringValue(value);
-  if (normalized == null) {
-    return undefined;
-  }
-  if (!/[._-]/.test(normalized)) {
-    return undefined;
-  }
-  return normalized;
-}
-
-function toSerialStringValue(value: unknown): string | undefined {
-  const normalized = toStringValue(value);
-  if (normalized == null) {
-    return undefined;
-  }
-  if (/^(unknown|unavailable|none|null)$/i.test(normalized)) {
-    return undefined;
-  }
-  if (normalized.length < 6) {
-    return undefined;
-  }
-  return normalized;
-}
-
-function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
-  for (const value of values) {
-    if (value != null && value.trim().length > 0) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function stripVendorPrefix(
-  value: string | undefined,
-  vendorName: string | undefined,
-): string | undefined {
-  if (value == null) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-  const vendor = vendorName?.trim();
-  if (vendor == null || vendor.length === 0) {
-    return trimmed;
-  }
-  const prefixPattern = new RegExp(`^${escapeRegExp(vendor)}[\\s\\-_:|,.]*`, "i");
-  const stripped = trimmed.replace(prefixPattern, "").trim();
-  return stripped.length > 0 ? stripped : trimmed;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function isLikelyOpaqueModelName(value: string): boolean {
-  const normalized = value.trim();
-  if (normalized.length === 0) {
-    return false;
-  }
-
-  return (
-    normalized.includes(".") ||
-    normalized.includes("_") ||
-    /[a-z]+\.[a-z]+/i.test(normalized) ||
-    /[a-z]{2,}\d{2,}/i.test(normalized)
-  );
 }
 
 export class BridgeEnvironmentFactory extends BridgeFactory {
-  constructor(private readonly parent: AppEnvironment) {
+  constructor(
+    private readonly parent: AppEnvironment,
+    private readonly storageLocation?: string,
+  ) {
     super("BridgeEnvironmentFactory");
   }
 
   async create(initialData: BridgeData): Promise<Bridge> {
-    const env = await BridgeEnvironment.create(this.parent, initialData);
+    const isServerMode = initialData.featureFlags?.serverMode === true;
+
+    if (isServerMode) {
+      return this.createServerModeBridge(initialData);
+    }
+
+    return this.createNormalBridge(initialData);
+  }
+
+  private async createNormalBridge(initialData: BridgeData): Promise<Bridge> {
+    const env = await BridgeEnvironment.create(
+      this.parent,
+      initialData,
+      this.storageLocation,
+    );
 
     class BridgeWithEnvironment extends Bridge {
       override async dispose(): Promise<void> {
@@ -448,5 +164,53 @@ export class BridgeEnvironmentFactory extends BridgeFactory {
     );
     await bridge.initialize();
     return bridge;
+  }
+
+  private async createServerModeBridge(
+    initialData: BridgeData,
+  ): Promise<Bridge> {
+    // Use ServerModeEnvironment which doesn't create BridgeEndpointManager
+    const env = await ServerModeEnvironment.create(this.parent, initialData);
+    const loggerService = env.get(LoggerService);
+    const dataProvider = await env.load(BridgeDataProvider);
+
+    // Create server mode specific components
+    const serverNode = new ServerModeServerNode(env, dataProvider);
+
+    const endpointManager = new ServerModeEndpointManager(
+      serverNode,
+      await env.load(HomeAssistantClient),
+      env.get(BridgeRegistry),
+      await env.load(EntityMappingStorage),
+      dataProvider.id,
+      loggerService.get("ServerModeEndpointManager"),
+    );
+
+    // Return as Bridge type (ServerModeBridge has compatible interface)
+    class ServerModeBridgeWithEnvironment
+      extends ServerModeBridge
+      implements Pick<Bridge, "id" | "data" | "aggregator">
+    {
+      get aggregator() {
+        // Server mode doesn't have an aggregator, return undefined cast
+        return undefined as unknown as Bridge["aggregator"];
+      }
+
+      override async dispose(): Promise<void> {
+        await super.dispose();
+        await env.dispose();
+      }
+    }
+
+    const bridge = new ServerModeBridgeWithEnvironment(
+      loggerService,
+      dataProvider,
+      endpointManager,
+      serverNode,
+    );
+    await bridge.initialize();
+
+    // Cast to Bridge - the interfaces are compatible for BridgeService usage
+    return bridge as unknown as Bridge;
   }
 }

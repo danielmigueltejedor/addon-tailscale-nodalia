@@ -4,6 +4,8 @@ import { Provider as StateProvider } from "react-redux";
 import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 
+import "./i18n/index.ts";
+
 import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
@@ -13,6 +15,7 @@ import CssBaseline from "@mui/material/CssBaseline";
 import GlobalStyles from "@mui/material/GlobalStyles";
 import { ThemeProvider } from "@mui/material/styles";
 import { NotificationsProvider } from "./components/notifications/notifications-provider.tsx";
+import { WebSocketProvider } from "./contexts/WebSocketContext.tsx";
 import { routes } from "./routes.tsx";
 import { store } from "./state/store.ts";
 import { AppLayout } from "./theme/AppLayout.tsx";
@@ -53,9 +56,11 @@ createRoot(document.getElementById("root")!).render(
               },
           }}
         />
-        <NotificationsProvider>
-          <RouterProvider router={router} />
-        </NotificationsProvider>
+        <WebSocketProvider>
+          <NotificationsProvider>
+            <RouterProvider router={router} />
+          </NotificationsProvider>
+        </WebSocketProvider>
       </ThemeProvider>
     </StateProvider>
   </StrictMode>,

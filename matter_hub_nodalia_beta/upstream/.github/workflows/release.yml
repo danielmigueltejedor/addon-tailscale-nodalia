@@ -1,0 +1,205 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Manual version to release (e.g., 4.1.0-testing.1)'
+        required: false
+        type: string
+  push:
+    branches:
+      - main
+      - testing
+    paths-ignore:
+      - '*.md'
+      - 'docs-site/**'
+      - '.github/workflows/docs.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      issues: write
+    name: Perform NPM Release
+    runs-on: ubuntu-latest
+    outputs:
+      node-version: ${{ steps.setup.outputs.node-version }}
+      release-version: ${{ steps.release.outputs.release-version }}
+      release-channel: ${{ steps.release.outputs.release-channel }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Environment
+        id: setup
+        uses: ./.github/actions/setup-node
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+      - name: Test
+        run: pnpm run test
+
+      - name: Prepare Manual Version
+        if: github.event.inputs.version != ''
+        run: pnpm run release:version ${{ github.event.inputs.version }}
+
+      - name: Build
+        run: pnpm run build
+        env:
+          BASE_URL: /home-assistant-matter-hub
+          APP_VERSION: ${{ github.event.inputs.version || '' }}
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm run release
+
+      - name: Analyze Release
+        id: release
+        run: |
+          # Check for manual version input first
+          MANUAL_VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$MANUAL_VERSION" ]; then
+            RELEASE_VERSION="$MANUAL_VERSION"
+            # Determine channel from version string
+            if [[ "$MANUAL_VERSION" == *"-testing"* ]]; then
+              RELEASE_CHANNEL=testing
+            elif [[ "$MANUAL_VERSION" == *"-alpha"* ]]; then
+              RELEASE_CHANNEL=alpha
+            else
+              RELEASE_CHANNEL=latest
+            fi
+          else
+            RELEASE_VERSION=$([ -f RELEASE_VERSION ] && cat RELEASE_VERSION || echo '')
+            RELEASE_CHANNEL=$([ -f RELEASE_CHANNEL ] && cat RELEASE_CHANNEL || echo '')
+            if [ -z "$RELEASE_CHANNEL" ]; then
+              RELEASE_CHANNEL=latest
+            fi
+          fi
+          echo "release-version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release-channel=$RELEASE_CHANNEL" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+      - name: Package Artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: package.tgz
+          path: apps/home-assistant-matter-hub/package.tgz
+
+  prepare-docker:
+    name: "Prepare Docker"
+    runs-on: ubuntu-latest
+    outputs:
+      dockerfiles: ${{ steps.dockerfiles.outputs.dockerfiles }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Find Dockerfiles
+        id: dockerfiles
+        uses: ./.github/actions/find-dockerfiles
+
+  docker:
+    name: "Build Docker"
+    runs-on: ubuntu-24.04-arm
+    needs: [prepare-docker, release]
+    if: needs.release.outputs.release-version != ''
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        dockerfile: ${{ fromJSON(needs.prepare-docker.outputs.dockerfiles) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Docker
+        uses: ./.github/actions/setup-docker
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package Artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: package.tgz
+          path: apps/home-assistant-matter-hub/
+          merge-multiple: true
+
+      - name: Build Docker
+        uses: ./.github/actions/docker
+        with:
+          push: true
+          channel: ${{ needs.release.outputs.release-channel }}
+          dockerfile: ${{ matrix.dockerfile }}
+          package-version: ${{ needs.release.outputs.release-version }}
+
+  npm-publish:
+    name: "Publish to npm"
+    runs-on: ubuntu-latest
+    needs: [release]
+    if: needs.release.outputs.release-version != ''
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-node
+
+      - name: Download Package
+        uses: actions/download-artifact@v7
+        with:
+          name: package.tgz
+          path: apps/home-assistant-matter-hub/
+          merge-multiple: true
+
+      - name: Repack as @riddix/hamh
+        run: |
+          cd apps/home-assistant-matter-hub
+          mkdir -p repack && tar xzf package.tgz -C repack
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('repack/package/package.json','utf8'));
+            pkg.name = '@riddix/hamh';
+            pkg.repository = 'github:RiDDiX/home-assistant-matter-hub';
+            fs.writeFileSync('repack/package/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          cd repack && tar czf ../package-npm.tgz package && cd ..
+          rm -rf repack
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish apps/home-assistant-matter-hub/package-npm.tgz --provenance --no-git-checks --access public --tag ${{ needs.release.outputs.release-channel }}
+
+  dispatch-addon:
+    name: "Dispatch Addon Repository"
+    runs-on: ubuntu-latest
+    needs: [release, docker]
+    if: needs.release.outputs.release-version != ''
+    steps:
+      - name: Dispatch Addon Repository
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ secrets.ADDON_REPOSITORY_PAT }}
+          repository: "riddix/home-assistant-addons"
+          event-type: release
+          client-payload: |
+            {
+              "project": "hamh",
+              "channel": "${{needs.release.outputs.release-channel}}",
+              "version": "${{needs.release.outputs.release-version}}" ,
+              "changelogUrl": "https://github.com/${{github.repository}}/releases/download/v${{needs.release.outputs.release-version}}/CHANGELOG_FULL.md"
+            }

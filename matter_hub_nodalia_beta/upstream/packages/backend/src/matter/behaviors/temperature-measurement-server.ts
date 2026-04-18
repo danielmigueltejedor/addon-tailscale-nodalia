@@ -24,8 +24,14 @@ class TemperatureMeasurementServerBase extends Base {
   }
 
   private update(entity: HomeAssistantEntityInformation) {
+    if (!entity.state || !entity.state.attributes) {
+      return;
+    }
     applyPatchState(this.state, {
       measuredValue: this.getTemperature(entity.state) ?? null,
+      // min/max values in 0.01°C units: -40°C to 125°C (typical sensor range)
+      minMeasuredValue: -4000,
+      maxMeasuredValue: 12500,
     });
   }
 

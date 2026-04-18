@@ -1,0 +1,11 @@
+name: Setup Docker
+description: Setup Docker with QEMU and Buildx for multi-architecture builds
+
+runs:
+  using: composite
+  steps:
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4

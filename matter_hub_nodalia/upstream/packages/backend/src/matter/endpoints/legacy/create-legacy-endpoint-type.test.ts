@@ -18,6 +18,7 @@ import {
   type SensorDeviceAttributes,
   SensorDeviceClass,
   type VacuumDeviceAttributes,
+  type WaterHeaterDeviceAttributes,
 } from "@home-assistant-matter-hub/common";
 import { Endpoint, type EndpointType } from "@matter/main";
 import { uniq } from "lodash-es";
@@ -68,6 +69,12 @@ const testEntities: Record<
       hvac_mode: ClimateHvacMode.off,
       hvac_action: ClimateHvacAction.off,
     }),
+    // Ventilation-only device (e.g. Ambientika CMV, #130)
+    createEntity<ClimateDeviceAttributes>("climate.cl5", "on", {
+      hvac_modes: [ClimateHvacMode.fan_only, ClimateHvacMode.off],
+      hvac_mode: ClimateHvacMode.off,
+      hvac_action: ClimateHvacAction.off,
+    }),
   ],
   [HomeAssistantDomain.cover]: [
     createEntity<CoverDeviceAttributes>("cover.co1", "on", {
@@ -76,6 +83,11 @@ const testEntities: Record<
   ],
   [HomeAssistantDomain.fan]: [
     createEntity<FanDeviceAttributes>("fan.f1", "on"),
+    createEntity<FanDeviceAttributes>("fan.f2", "on", {
+      supported_features: 1, // SET_SPEED
+      percentage: 50,
+      percentage_step: 33.33,
+    }),
   ],
   [HomeAssistantDomain.light]: [
     createEntity<LightDeviceAttributes>("light.l1", "on"),
@@ -102,16 +114,68 @@ const testEntities: Record<
       ],
     }),
   ],
-  [HomeAssistantDomain.lock]: [createEntity("lock.l1", "locked")],
+  [HomeAssistantDomain.lock]: [
+    createEntity("lock.l1", "locked"),
+    // Lock with OPEN feature (unlatch/unbolt support)
+    createEntity("lock.l2", "locked", { supported_features: 1 }),
+  ],
   [HomeAssistantDomain.sensor]: [
-    createEntity<SensorDeviceAttributes>("sensor.s1", "on", {
+    createEntity<SensorDeviceAttributes>("sensor.s1", "20", {
       device_class: SensorDeviceClass.temperature,
     }),
-    createEntity<SensorDeviceAttributes>("sensor.s2", "on", {
+    createEntity<SensorDeviceAttributes>("sensor.s2", "50", {
       device_class: SensorDeviceClass.humidity,
     }),
-    createEntity<SensorDeviceAttributes>("sensor.s3", "on", {
+    createEntity<SensorDeviceAttributes>("sensor.s3", "100", {
       device_class: SensorDeviceClass.illuminance,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s4", "1013", {
+      device_class: SensorDeviceClass.pressure,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s5", "1.5", {
+      device_class: SensorDeviceClass.volume_flow_rate,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s6", "50", {
+      device_class: SensorDeviceClass.aqi,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s7", "400", {
+      device_class: SensorDeviceClass.carbon_dioxide,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s8", "5", {
+      device_class: SensorDeviceClass.carbon_monoxide,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s9", "40", {
+      device_class: SensorDeviceClass.nitrogen_dioxide,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s10", "60", {
+      device_class: SensorDeviceClass.ozone,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s11", "15", {
+      device_class: SensorDeviceClass.pm1,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s12", "25", {
+      device_class: SensorDeviceClass.pm25,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s13", "50", {
+      device_class: SensorDeviceClass.pm10,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s14", "100", {
+      device_class: SensorDeviceClass.volatile_organic_compounds,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s15", "1500", {
+      device_class: SensorDeviceClass.power,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s16", "12.5", {
+      device_class: SensorDeviceClass.energy,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s17", "230", {
+      device_class: SensorDeviceClass.voltage,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s18", "6.5", {
+      device_class: SensorDeviceClass.current,
+    }),
+    createEntity<SensorDeviceAttributes>("sensor.s19", "75", {
+      device_class: SensorDeviceClass.battery,
     }),
   ],
   [HomeAssistantDomain.switch]: [createEntity("switch.sw1", "on")],
@@ -138,6 +202,41 @@ const testEntities: Record<
       current_humidity: 45,
     }),
   ],
+  [HomeAssistantDomain.event]: [
+    createEntity("event.doorbell_press", "2024-01-01T00:00:00", {
+      device_class: "doorbell",
+      event_types: ["press", "double_press"],
+      event_type: "press",
+    }),
+  ],
+  [HomeAssistantDomain.valve]: [createEntity("valve.v1", "open")],
+  [HomeAssistantDomain.alarm_control_panel]: [
+    createEntity("alarm_control_panel.a1", "armed_away", {
+      supported_features: 3, // ARM_HOME + ARM_AWAY
+    }),
+  ],
+  [HomeAssistantDomain.remote]: [createEntity("remote.r1", "on")],
+  [HomeAssistantDomain.siren]: [createEntity("siren.s1", "off")],
+  [HomeAssistantDomain.select]: [
+    createEntity("select.mode1", "option_a", {
+      options: ["option_a", "option_b", "option_c"],
+    }),
+  ],
+  [HomeAssistantDomain.input_select]: [
+    createEntity("input_select.is1", "choice_1", {
+      options: ["choice_1", "choice_2", "choice_3"],
+    }),
+  ],
+  [HomeAssistantDomain.water_heater]: [
+    createEntity<WaterHeaterDeviceAttributes>("water_heater.wh1", "off", {
+      min_temp: 30,
+      max_temp: 100,
+      current_temperature: 45,
+      temperature: 60,
+      operation_mode: "off",
+      operation_list: ["off", "eco", "electric"],
+    }),
+  ],
 };
 
 describe("createLegacyEndpointType", () => {
@@ -150,8 +249,8 @@ describe("createLegacyEndpointType", () => {
     const actual = uniq(endpoints.flatMap((d) => Object.keys(d.state)))
       .filter((key) => !/^\d+$/.test(key))
       .sort();
-    const known = new Set(Object.keys(ClusterId));
-    expect(actual.every((clusterId) => known.has(clusterId))).toBeTruthy();
+    const expected = Object.keys(ClusterId).sort();
+    expect(actual).toEqual(expected);
   });
 });
 

@@ -3,7 +3,9 @@ import { Theme } from "@rjsf/mui";
 import type {
   CustomValidator,
   FormValidation,
+  RegistryFieldsType,
   RJSFValidationError,
+  TemplatesType,
   UiSchema,
 } from "@rjsf/utils";
 import validator from "@rjsf/validator-ajv8";
@@ -19,11 +21,17 @@ export interface FormEditorProps {
   value: object;
   onChange: (value: object, isValid: boolean) => void;
   customValidate?: (value: object | undefined) => ValidationError[];
+  templates?: Partial<TemplatesType>;
+  fields?: RegistryFieldsType;
 }
 
 export const FormEditor = (props: FormEditorProps) => {
-  const onChange = (data: object, errors: RJSFValidationError[]) => {
-    props.onChange(data, errors.length === 0);
+  const onChange = (data: object, _errors: RJSFValidationError[]) => {
+    // Only gate save on custom validation errors (e.g. port conflicts).
+    // RJSF's schema errors may include false positives introduced by its
+    // internal default-state processing; inline error hints still render.
+    const customErrors = props.customValidate?.(data) ?? [];
+    props.onChange(data, customErrors.length === 0);
   };
 
   const customValidate = props.customValidate;
@@ -57,6 +65,8 @@ export const FormEditor = (props: FormEditorProps) => {
       customValidate={customValidator}
       showErrorList={false}
       onChange={(data) => onChange(data.formData, data.errors)}
+      templates={props.templates}
+      fields={props.fields}
     />
   );
 };
