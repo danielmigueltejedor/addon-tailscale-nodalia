@@ -14,13 +14,12 @@ Home Assistant app to bridge entities to Matter ecosystems.
 - This is a Nodalia packaging of Matter Hub.
 - The image bundles the local `upstream/` source tree during build.
 
-## Highlights in Stable 0.1.2
+## Highlights in Stable 0.2.0
 
-- Robotic vacuum room cleaning through Matter `ServiceArea` (Apple Home compatible).
-- Improved Roborock operational state mapping for washing/emptying/drying-related flows.
-- Vacuum identify command integration (`vacuum.locate`) for "play location sound".
-- Enhanced bridged identity handling (manufacturer/model/serial/firmware) with optional manual overrides.
-- Spanish UI improvements and cleaner bridge configuration editor UX.
+- Full rebase on upstream `riddix/home-assistant-matter-hub`: adds air-purifier, alarm-control-panel, dishwasher, pump, remote, select, siren, valve and water-heater device types; air-quality / PM / CO2 / TVOC / formaldehyde / ozone / NO2 / radon / electrical-energy / pressure / flow sensors; new backup, diagnostics, health, network-map, plugins, settings, labels, lock-credentials and dashboard pages.
+- Advanced vacuum engine: room discovery for Dreame, Ecovacs, Roborock, Xiaomi MIOT and Valetudo (MQTT) + fan-speed / mop-intensity mode trees + pending-mode reconciliation.
+- Node runtime bumped to 24; dynamic Node heap sizing (25% of cgroup/available/total memory, clamped 256–1024 MB).
+- Nodalia branding preserved (logo, app icon, Spanish UI).
 
 ---
 
