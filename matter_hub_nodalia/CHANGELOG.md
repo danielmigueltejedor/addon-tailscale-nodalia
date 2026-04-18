@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.1
+- Fix build: inject Node 24 via multi-stage `node:24-alpine` copy. Alpine base shipped Node 22 but upstream `package.json` requires Node 24, causing `ERR_PNPM_UNSUPPORTED_ENGINE`.
+
 ## 0.2.0
 - Rebased stable on upstream `riddix/home-assistant-matter-hub` main (synced from `0.3.0-beta.1`). Adds every new device type, sensor, frontend page and API in the upstream line. See the beta changelog for the full list.
 - Node runtime bumped to 24; addon entrypoint gets dynamic Node heap sizing.

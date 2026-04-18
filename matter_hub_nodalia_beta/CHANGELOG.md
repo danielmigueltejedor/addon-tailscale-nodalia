@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.0-beta.2
+- Fix build: inject Node 24 via multi-stage `node:24-alpine` copy. Alpine base shipped Node 22 but upstream `package.json` requires Node 24, causing `ERR_PNPM_UNSUPPORTED_ENGINE`.
+
 ## 0.3.0-beta.1
 - Full rebase on upstream `riddix/home-assistant-matter-hub` main. Pulls in all new device types (air-purifier, alarm-control-panel, dishwasher, pump, remote, select, siren, valve, water-heater), new sensors (air-quality, CO2, CO, TVOC, PM1/2.5/10, formaldehyde, ozone, NO2, radon, electrical energy/power, flow, pressure), new frontend pages (dashboard, devices, diagnostics, network-map, health, labels, plugins, settings, lock-credentials, startup, area-setup) and new APIs (backup, bridge-export/icon, device-image, diagnostic, entity-mapping, health, logs, metrics, network-diagnostic, websocket).
 - Upstream vacuum engine now supersedes Nodalia's custom clean-mode/service-area implementation. The upstream code handles room discovery for Dreame, Ecovacs, Roborock, Xiaomi MIOT and Valetudo (via MQTT), plus cleaning-mode pending-state reconciliation and fan-speed / mop-intensity mode trees.
