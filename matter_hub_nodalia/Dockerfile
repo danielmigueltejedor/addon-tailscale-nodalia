@@ -15,8 +15,8 @@ COPY --from=nodebuild /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
   && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
   && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
-RUN corepack enable
-RUN npm install -g pnpm@10.28.1
+RUN corepack enable \
+  && corepack prepare pnpm@10.28.1 --activate
 
 WORKDIR /tmp/home-assistant-matter-hub
 COPY upstream/ ./

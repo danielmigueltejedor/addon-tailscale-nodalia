@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.0-beta.4
+- Use `corepack prepare pnpm@10.28.1 --activate` instead of `npm install -g pnpm`. Corepack had already registered a pnpm shim, causing EEXIST.
+
 ## 0.3.0-beta.3
 - Fix Dockerfile ARG scope: hoist `ARG BUILD_FROM` above first `FROM` so base image resolves after multi-stage node copy.
 
