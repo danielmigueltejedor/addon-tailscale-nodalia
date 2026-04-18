@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.0-beta.3
+- Fix Dockerfile ARG scope: hoist `ARG BUILD_FROM` above first `FROM` so base image resolves after multi-stage node copy.
+
 ## 0.3.0-beta.2
 - Fix build: inject Node 24 via multi-stage `node:24-alpine` copy. Alpine base shipped Node 22 but upstream `package.json` requires Node 24, causing `ERR_PNPM_UNSUPPORTED_ENGINE`.
 
