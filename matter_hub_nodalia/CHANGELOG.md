@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.4
+- Restore rich bridged-device identity extraction: firmware auto-detected from sibling `update.*` entities + any entity matching firmware/software/version; serial auto-detected from sibling serial/SN entities; manufacturer/model fall back to entity attributes (matter_vendor_name, vendor_name, manufacturer, brand, matter_product_name, product_name, model_name, model, device_model). Strips vendor prefix from product name and prefers friendly name over opaque model ids like `roborock.vacuum.a51`. UI overrides (custom vendor/product/serial) still win.
+
 ## 0.2.3
 - Use `corepack prepare pnpm@10.28.1 --activate` instead of `npm install -g pnpm`. Corepack had already registered a pnpm shim, causing EEXIST.
 
