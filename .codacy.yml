@@ -1,0 +1,6 @@
+exclude_paths:
+  - "matter_hub_nodalia/upstream/**"
+  - "matter_hub_nodalia_beta/upstream/**"
+  - "node_modules/**"
+  - "dist/**"
+  - "build/**"

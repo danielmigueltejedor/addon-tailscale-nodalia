@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 
 exec nodalia-matter-hub start \
   --log-level="$(bashio::config 'app_log_level' 'info')" \
