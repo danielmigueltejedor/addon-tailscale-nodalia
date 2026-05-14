@@ -51,12 +51,13 @@ jobs:
 
           LATEST=$(
             echo "$JSON" | jq -r '
-              .Version // .version // .Linux // .linux // empty
+              .TarballsVersion // .Tarballs.version // .Version // .version // empty
             '
           )
 
           if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
             echo "No pude obtener version desde pkgs.tailscale.com/stable/?mode=json"
+            echo "Primeros 2000 chars del JSON para depurar:"
             echo "$JSON" | head -c 2000 || true
             echo
             exit 1
@@ -108,6 +109,21 @@ jobs:
           echo "CURRENT=${{ steps.cur.outputs.current }}"
           echo "LATEST=${{ steps.ts.outputs.latest }}"
           echo "NEEDS_UPDATE=${{ steps.check.outputs.needs_update }}"
+
+      - name: Validate Tailscale tarball URLs
+        if: ${{ steps.check.outputs.needs_update == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LATEST="${{ steps.ts.outputs.latest }}"
+          for ARCH in amd64 arm64; do
+            URL="https://pkgs.tailscale.com/stable/tailscale_${LATEST}_${ARCH}.tgz"
+            echo "Checking ${URL}"
+            if ! curl --fail --head --silent --location "${URL}" >/dev/null; then
+              echo "ERROR: Tailscale tarball no existe: ${URL}"
+              exit 1
+            fi
+          done
 
       - name: Update Dockerfile TAILSCALE_VERSION
         if: ${{ steps.check.outputs.needs_update == 'true' }}
