@@ -32,7 +32,8 @@ RUN \
     httpx \
     pydantic \
     pyyaml \
-    uvicorn
+    uvicorn \
+    websockets
 
 COPY app /app/app
 COPY run.sh /run.sh

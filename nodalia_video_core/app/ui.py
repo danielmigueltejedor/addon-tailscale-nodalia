@@ -156,6 +156,24 @@ def dashboard_response() -> HTMLResponse:
       min-width: 0;
     }
 
+    .live {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      margin-bottom: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #000;
+    }
+
+    .live iframe {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #000;
+    }
+
     .camera-head {
       display: flex;
       align-items: flex-start;
@@ -322,7 +340,11 @@ def dashboard_response() -> HTMLResponse:
     function cameraCard(camera) {
       const state = text(camera.state, 'unknown');
       const cameraId = escapeHtml(camera.id);
+      const liveSrc = `./go2rtc/stream.html?src=${encodeURIComponent(camera.id)}&mode=webrtc,mse,hls,mjpeg`;
       return `<article class="camera">
+        <div class="live">
+          <iframe title="${escapeHtml(camera.name)} live" src="${liveSrc}" allow="autoplay; fullscreen; microphone"></iframe>
+        </div>
         <div class="camera-head">
           <div>
             <h2>${escapeHtml(camera.name)}</h2>
@@ -388,8 +410,10 @@ def dashboard_response() -> HTMLResponse:
         if (!cameras.length) {
           cameraGrid.innerHTML = '';
           message.innerHTML = '<div class="empty">No cameras configured.</div>';
-        } else {
+          cameraGrid.dataset.signature = '';
+        } else if (cameraGrid.dataset.signature !== cameras.map(camera => camera.id).join('|')) {
           cameraGrid.innerHTML = cameras.map(cameraCard).join('');
+          cameraGrid.dataset.signature = cameras.map(camera => camera.id).join('|');
         }
       } catch (error) {
         message.innerHTML = `<div class="error">Unable to load status: ${escapeHtml(error.message)}</div>`;

@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+import asyncio
+
+import httpx
+import websockets
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from starlette.background import BackgroundTask
+from starlette.responses import StreamingResponse
 
 from .go2rtc import Go2RTCManager
 from .ui import dashboard_response
@@ -8,7 +14,7 @@ from .watchdog import Watchdog
 
 
 def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
-    app = FastAPI(title="Nodalia Video Core", version="0.2.2")
+    app = FastAPI(title="Nodalia Video Core", version="0.3.0")
 
     @app.get("/")
     async def dashboard():
@@ -56,5 +62,71 @@ def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
     @app.get("/streams")
     async def streams() -> dict:
         return await go2rtc.get_streams()
+
+    @app.get("/go2rtc/{path:path}")
+    async def proxy_go2rtc(path: str, request: Request) -> StreamingResponse:
+        target = f"{go2rtc.config.go2rtc_api}/{path}"
+        if request.url.query:
+            target = f"{target}?{request.url.query}"
+
+        client = httpx.AsyncClient(timeout=None)
+        upstream_request = client.build_request("GET", target)
+        response = await client.send(upstream_request, stream=True)
+
+        async def close_upstream() -> None:
+            await response.aclose()
+            await client.aclose()
+
+        headers = {
+            key: value
+            for key, value in response.headers.items()
+            if key.lower() not in {"content-encoding", "content-length", "transfer-encoding"}
+        }
+        return StreamingResponse(
+            response.aiter_raw(),
+            status_code=response.status_code,
+            headers=headers,
+            background=BackgroundTask(close_upstream),
+        )
+
+    @app.websocket("/go2rtc/api/ws")
+    async def proxy_go2rtc_ws(websocket: WebSocket) -> None:
+        await websocket.accept()
+        target = go2rtc.config.go2rtc_api.replace("http://", "ws://").replace("https://", "wss://")
+        target = f"{target}/api/ws"
+        if websocket.url.query:
+            target = f"{target}?{websocket.url.query}"
+
+        try:
+            async with websockets.connect(target, max_size=None) as upstream:
+                async def client_to_upstream() -> None:
+                    while True:
+                        message = await websocket.receive()
+                        if message.get("text") is not None:
+                            await upstream.send(message["text"])
+                        elif message.get("bytes") is not None:
+                            await upstream.send(message["bytes"])
+                        elif message.get("type") == "websocket.disconnect":
+                            await upstream.close()
+                            return
+
+                async def upstream_to_client() -> None:
+                    async for message in upstream:
+                        if isinstance(message, bytes):
+                            await websocket.send_bytes(message)
+                        else:
+                            await websocket.send_text(message)
+
+                tasks = {
+                    asyncio.create_task(client_to_upstream()),
+                    asyncio.create_task(upstream_to_client()),
+                }
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+                for task in done:
+                    task.result()
+        except WebSocketDisconnect:
+            return
 
     return app

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - 2026-07-09
+
+### Added
+
+- Embed the live go2rtc camera player directly in the dashboard.
+- Proxy go2rtc web assets and WebSocket streams through the add-on API so live video works inside Home Assistant ingress.
+
 ## 0.2.2 - 2026-07-09
 
 ### Fixed
