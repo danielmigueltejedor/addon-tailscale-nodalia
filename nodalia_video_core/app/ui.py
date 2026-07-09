@@ -186,6 +186,27 @@ def dashboard_response() -> HTMLResponse:
       display: none;
     }
 
+    .snapshot-live {
+      display: none;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    .live-modes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: -4px 0 14px;
+    }
+
+    .live-modes button {
+      min-height: 30px;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
     .camera-head {
       display: flex;
       align-items: flex-start;
@@ -353,12 +374,21 @@ def dashboard_response() -> HTMLResponse:
       const state = text(camera.state, 'unknown');
       const cameraId = escapeHtml(camera.id);
       const streamId = encodeURIComponent(camera.id);
-      const hlsSrc = `./go2rtc/api/stream.m3u8?src=${streamId}&mp4`;
-      const fallbackSrc = `./go2rtc/stream.html?src=${streamId}&mode=hls,mjpeg,webrtc,mse`;
+      const hlsVideoSrc = `./go2rtc/api/stream.m3u8?src=${streamId}`;
+      const hlsAvSrc = `./go2rtc/api/stream.m3u8?src=${streamId}&mp4`;
+      const playerSrc = `./go2rtc/stream.html?src=${streamId}&mode=hls,mjpeg,webrtc,mse`;
+      const snapshotSrc = `./go2rtc/api/frame.jpeg?src=${streamId}`;
       return `<article class="camera">
         <div class="live">
-          <video class="native-live" data-camera="${cameraId}" data-fallback="${fallbackSrc}" controls autoplay muted playsinline preload="auto" src="${hlsSrc}"></video>
+          <video class="native-live" data-camera="${cameraId}" data-hls-video="${hlsVideoSrc}" data-hls-av="${hlsAvSrc}" data-player="${playerSrc}" data-snapshot="${snapshotSrc}" controls autoplay muted playsinline preload="auto" src="${hlsVideoSrc}"></video>
           <iframe class="live-fallback" title="${escapeHtml(camera.name)} live" allow="autoplay; fullscreen; microphone"></iframe>
+          <img class="snapshot-live" alt="${escapeHtml(camera.name)} snapshot">
+        </div>
+        <div class="live-modes" data-camera="${cameraId}">
+          <button class="secondary" type="button" data-live-mode="hls-video" data-camera="${cameraId}">HLS video</button>
+          <button class="secondary" type="button" data-live-mode="hls-av" data-camera="${cameraId}">HLS audio</button>
+          <button class="secondary" type="button" data-live-mode="player" data-camera="${cameraId}">go2rtc</button>
+          <button class="secondary" type="button" data-live-mode="snapshot" data-camera="${cameraId}">Snapshot</button>
         </div>
         <div class="camera-head">
           <div>
@@ -402,19 +432,74 @@ def dashboard_response() -> HTMLResponse:
         if (video.dataset.fallbackArmed === 'true') return;
         video.dataset.fallbackArmed = 'true';
         const showFallback = () => {
-          if (video.readyState >= 2) return;
-          const fallback = video.parentElement.querySelector('iframe.live-fallback');
-          if (!fallback) return;
-          fallback.src = video.dataset.fallback;
-          fallback.style.display = 'block';
-          video.style.display = 'none';
+          if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) return;
+          switchLiveMode(video.dataset.camera, 'snapshot');
         };
         video.addEventListener('error', showFallback, { once: true });
         setTimeout(showFallback, 8000);
+        video.addEventListener('loadedmetadata', () => {
+          setTimeout(showFallback, 2500);
+        }, { once: true });
         video.play().catch(() => {
           video.muted = true;
           video.play().catch(() => {});
         });
+      });
+    }
+
+    function refreshSnapshot(img) {
+      if (img.dataset.timer) {
+        clearInterval(Number(img.dataset.timer));
+      }
+      const base = img.dataset.base;
+      const update = () => {
+        img.src = `${base}${base.includes('?') ? '&' : '?'}t=${Date.now()}`;
+      };
+      update();
+      img.dataset.timer = String(setInterval(update, 1200));
+    }
+
+    function stopSnapshot(img) {
+      if (img.dataset.timer) {
+        clearInterval(Number(img.dataset.timer));
+        delete img.dataset.timer;
+      }
+    }
+
+    function switchLiveMode(cameraId, mode) {
+      const video = document.querySelector(`video.native-live[data-camera="${CSS.escape(cameraId)}"]`);
+      if (!video) return;
+      const live = video.parentElement;
+      const fallback = live.querySelector('iframe.live-fallback');
+      const snapshot = live.querySelector('img.snapshot-live');
+      stopSnapshot(snapshot);
+      video.pause();
+      video.style.display = 'none';
+      fallback.style.display = 'none';
+      snapshot.style.display = 'none';
+
+      if (mode === 'player') {
+        fallback.src = video.dataset.player;
+        fallback.style.display = 'block';
+        return;
+      }
+      if (mode === 'snapshot') {
+        snapshot.dataset.base = video.dataset.snapshot;
+        snapshot.style.display = 'block';
+        refreshSnapshot(snapshot);
+        return;
+      }
+
+      fallback.removeAttribute('src');
+      const nextSrc = mode === 'hls-av' ? video.dataset.hlsAv : video.dataset.hlsVideo;
+      if (video.getAttribute('src') !== nextSrc) {
+        video.setAttribute('src', nextSrc);
+        video.load();
+      }
+      video.style.display = 'block';
+      video.play().catch(() => {
+        video.muted = true;
+        video.play().catch(() => {});
       });
     }
 
@@ -460,6 +545,11 @@ def dashboard_response() -> HTMLResponse:
     }
 
     document.addEventListener('click', event => {
+      const modeButton = event.target.closest('button[data-live-mode]');
+      if (modeButton) {
+        switchLiveMode(modeButton.dataset.camera, modeButton.dataset.liveMode);
+        return;
+      }
       const button = event.target.closest('button[data-camera]');
       if (!button) return;
       reconnect(button.dataset.camera, button.dataset.action === 'hard');

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 - 2026-07-09
+
+### Fixed
+
+- Default live playback to HLS video-only so Safari does not get stuck on audio-only fMP4 playback.
+- Add live mode buttons for HLS video, HLS audio/video, go2rtc player and snapshot fallback.
+- Detect loaded audio with zero video dimensions and switch to snapshot fallback automatically.
+
 ## 0.3.1 - 2026-07-09
 
 ### Fixed
