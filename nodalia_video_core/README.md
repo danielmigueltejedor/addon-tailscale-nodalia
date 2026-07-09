@@ -14,7 +14,7 @@ In the add-on configuration UI:
 
 ```yaml
 log_level: info
-cameras:
+cameras: |
   entrada:
     name: Entrada
     source:

@@ -41,6 +41,7 @@ def _read_raw_config() -> dict[str, Any]:
 def load_config() -> AddonConfig:
     try:
         raw = _read_raw_config()
+        raw = _normalize_raw_config(raw)
         config = AddonConfig.model_validate(raw)
     except json.JSONDecodeError as exc:
         raise ConfigError(f"Invalid JSON in {OPTIONS_PATH}: {exc}") from exc
@@ -52,3 +53,20 @@ def load_config() -> AddonConfig:
     if not config.cameras:
         LOGGER.warning("No cameras configured; API and go2rtc will start without streams")
     return config
+
+
+def _normalize_raw_config(raw: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(raw)
+    cameras = normalized.get("cameras")
+    if isinstance(cameras, str):
+        if not cameras.strip():
+            normalized["cameras"] = {}
+        else:
+            parsed = yaml.safe_load(cameras)
+            if parsed is None:
+                normalized["cameras"] = {}
+            elif isinstance(parsed, dict):
+                normalized["cameras"] = parsed
+            else:
+                raise ConfigError("cameras must be a YAML mapping")
+    return normalized
