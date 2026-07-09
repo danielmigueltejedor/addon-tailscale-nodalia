@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 - 2026-07-09
+
+### Fixed
+
+- Open the dashboard through Home Assistant ingress instead of a direct host port.
+- Resolve dashboard API links relative to the ingress path.
+
 ## 0.2.1 - 2026-07-09
 
 ### Fixed

@@ -270,8 +270,8 @@ def dashboard_response() -> HTMLResponse:
     <div class="toolbar">
       <div class="timestamp" id="updated">Not updated yet</div>
       <div class="actions">
-        <a class="button secondary" href="health" target="_blank" rel="noreferrer">Health JSON</a>
-        <a class="button secondary" href="streams" target="_blank" rel="noreferrer">go2rtc Streams</a>
+        <a class="button secondary" href="./health" target="_blank" rel="noreferrer">Health JSON</a>
+        <a class="button secondary" href="./streams" target="_blank" rel="noreferrer">go2rtc Streams</a>
       </div>
     </div>
 
@@ -285,7 +285,7 @@ def dashboard_response() -> HTMLResponse:
     const message = document.getElementById('message');
 
     function apiUrl(path) {
-      return new URL(path.replace(/^\\//, ''), document.baseURI).toString();
+      return new URL(`./${path.replace(/^\\//, '')}`, document.baseURI).toString();
     }
 
     function text(value, fallback = '-') {
