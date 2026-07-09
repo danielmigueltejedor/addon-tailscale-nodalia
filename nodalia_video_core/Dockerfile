@@ -18,6 +18,9 @@ RUN \
     py3-virtualenv \
   && if [ "${BUILD_ARCH}" = "aarch64" ]; then GO2RTC_ARCH="arm64"; fi \
   && if [ "${BUILD_ARCH}" = "amd64" ]; then GO2RTC_ARCH="amd64"; fi \
+  && if [ "${BUILD_ARCH}" = "armhf" ]; then GO2RTC_ARCH="armv6"; fi \
+  && if [ "${BUILD_ARCH}" = "armv7" ]; then GO2RTC_ARCH="arm"; fi \
+  && if [ "${BUILD_ARCH}" = "i386" ]; then GO2RTC_ARCH="i386"; fi \
   && curl --fail --show-error --silent --location \
     "https://github.com/AlexxIT/go2rtc/releases/download/v${GO2RTC_VERSION}/go2rtc_linux_${GO2RTC_ARCH}" \
     --output /usr/local/bin/go2rtc \
