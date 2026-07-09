@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 - 2026-07-09
+
+### Added
+
+- Add a lightweight dashboard served by the add-on API.
+- Enable Home Assistant ingress for opening the dashboard from the add-on page.
+- Add reconnect controls and stream links to the dashboard.
+
 ## 0.1.1 - 2026-07-09
 
 ### Fixed

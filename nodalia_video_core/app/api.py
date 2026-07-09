@@ -3,11 +3,16 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Query
 
 from .go2rtc import Go2RTCManager
+from .ui import dashboard_response
 from .watchdog import Watchdog
 
 
 def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
-    app = FastAPI(title="Nodalia Video Core", version="0.1.1")
+    app = FastAPI(title="Nodalia Video Core", version="0.2.0")
+
+    @app.get("/")
+    async def dashboard():
+        return dashboard_response()
 
     @app.get("/health")
     async def health() -> dict:

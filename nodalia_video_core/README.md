@@ -56,6 +56,7 @@ Because the add-on uses host networking, replace `127.0.0.1` with the Home Assis
 The local API listens on port `8099`:
 
 ```bash
+curl http://127.0.0.1:8099/
 curl http://127.0.0.1:8099/health
 curl http://127.0.0.1:8099/cameras
 curl http://127.0.0.1:8099/cameras/entrada
@@ -64,6 +65,8 @@ curl -X POST "http://127.0.0.1:8099/cameras/entrada/reconnect?hard=true"
 curl -X POST http://127.0.0.1:8099/go2rtc/reload
 curl http://127.0.0.1:8099/streams
 ```
+
+The root page is a lightweight dashboard with camera health, stream links and reconnect controls. When the add-on is opened from Home Assistant, the same dashboard is available through ingress.
 
 ## Camera States
 
