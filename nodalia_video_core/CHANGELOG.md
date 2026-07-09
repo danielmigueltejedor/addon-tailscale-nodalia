@@ -1,0 +1,12 @@
+# Changelog
+
+## 0.1.0-alpha.1 - 2026-07-09
+
+### Added
+
+- Initial MVP of Nodalia Video Core.
+- Automatic go2rtc configuration generation from add-on cameras.
+- FastAPI local health API.
+- Per-camera watchdog using ffprobe against the re-emitted RTSP stream.
+- Soft and hard reconnect paths with cooldown and attempt limits.
+- Audio health reporting for expected, missing, disabled and not expected audio.
