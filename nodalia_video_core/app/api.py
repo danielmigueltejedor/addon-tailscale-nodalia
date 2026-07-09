@@ -7,7 +7,7 @@ from .watchdog import Watchdog
 
 
 def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
-    app = FastAPI(title="Nodalia Video Core", version="0.1.0-alpha.1")
+    app = FastAPI(title="Nodalia Video Core", version="0.1.1")
 
     @app.get("/health")
     async def health() -> dict:

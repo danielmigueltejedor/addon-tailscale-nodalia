@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 - 2026-07-09
+
+### Fixed
+
+- Keep the configured RTSP source URL unchanged when generating go2rtc config.
+- Report failed video probes separately from missing expected audio.
+
 ## 0.1.0-alpha.1 - 2026-07-09
 
 ### Added

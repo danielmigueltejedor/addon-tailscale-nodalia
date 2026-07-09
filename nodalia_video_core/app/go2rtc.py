@@ -41,11 +41,7 @@ class Go2RTCManager:
         }
 
     def _stream_source(self, camera: CameraConfig) -> str:
-        source = camera.source.url
-        if camera.source.type == "rtsp" and camera.source.transport == "tcp":
-            separator = "&" if "?" in source else "?"
-            source = f"{source}{separator}rtsp_transport=tcp"
-        return source
+        return camera.source.url
 
     def write_config(self) -> None:
         self.config_path.parent.mkdir(parents=True, exist_ok=True)

@@ -91,9 +91,15 @@ class Watchdog:
             if previous_state in (CameraState.DEGRADED, CameraState.RECONNECTING):
                 LOGGER.info("[%s] Stream recovered", camera_id)
             health.reconnect_count = 0
+        else:
+            LOGGER.warning(
+                "[%s] Video probe failed: %s",
+                camera_id,
+                probe.error or "no video stream detected",
+            )
         if probe.audio_detected:
             LOGGER.info("[%s] Audio OK: %s", camera_id, probe.audio_codec or "unknown")
-        elif camera.audio.enabled and camera.audio.expected:
+        elif probe.video_detected and camera.audio.enabled and camera.audio.expected:
             LOGGER.warning("[%s] Audio missing but expected, marking degraded", camera_id)
 
         if health.last_frame_age and health.last_frame_age > camera.health.frame_timeout:
