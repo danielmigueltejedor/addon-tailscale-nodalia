@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3 - 2026-07-09
+
+### Fixed
+
+- Add an explicit Audio ON/OFF control that keeps the stable video-only HLS view and starts audio through a separate hidden player after a user gesture.
+
 ## 0.3.2 - 2026-07-09
 
 ### Fixed

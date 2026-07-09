@@ -194,6 +194,14 @@ def dashboard_response() -> HTMLResponse:
       background: #000;
     }
 
+    .live-audio {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
     .live-modes {
       display: flex;
       flex-wrap: wrap;
@@ -381,11 +389,13 @@ def dashboard_response() -> HTMLResponse:
       return `<article class="camera">
         <div class="live">
           <video class="native-live" data-camera="${cameraId}" data-hls-video="${hlsVideoSrc}" data-hls-av="${hlsAvSrc}" data-player="${playerSrc}" data-snapshot="${snapshotSrc}" controls autoplay muted playsinline preload="auto" src="${hlsVideoSrc}"></video>
+          <video class="live-audio" data-camera="${cameraId}" playsinline preload="none"></video>
           <iframe class="live-fallback" title="${escapeHtml(camera.name)} live" allow="autoplay; fullscreen; microphone"></iframe>
           <img class="snapshot-live" alt="${escapeHtml(camera.name)} snapshot">
         </div>
         <div class="live-modes" data-camera="${cameraId}">
           <button class="secondary" type="button" data-live-mode="hls-video" data-camera="${cameraId}">HLS video</button>
+          <button class="secondary" type="button" data-live-audio="toggle" data-camera="${cameraId}">Audio ON</button>
           <button class="secondary" type="button" data-live-mode="hls-av" data-camera="${cameraId}">HLS audio</button>
           <button class="secondary" type="button" data-live-mode="player" data-camera="${cameraId}">go2rtc</button>
           <button class="secondary" type="button" data-live-mode="snapshot" data-camera="${cameraId}">Snapshot</button>
@@ -503,6 +513,33 @@ def dashboard_response() -> HTMLResponse:
       });
     }
 
+    function toggleLiveAudio(cameraId, button) {
+      const video = document.querySelector(`video.native-live[data-camera="${CSS.escape(cameraId)}"]`);
+      if (!video) return;
+      const audio = video.parentElement.querySelector(`video.live-audio[data-camera="${CSS.escape(cameraId)}"]`);
+      if (!audio) return;
+
+      if (audio.dataset.enabled === 'true') {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+        audio.dataset.enabled = 'false';
+        button.textContent = 'Audio ON';
+        return;
+      }
+
+      audio.src = video.dataset.hlsAv;
+      audio.muted = false;
+      audio.volume = 1;
+      audio.dataset.enabled = 'true';
+      audio.play().then(() => {
+        button.textContent = 'Audio OFF';
+      }).catch(() => {
+        audio.dataset.enabled = 'false';
+        button.textContent = 'Audio ON';
+      });
+    }
+
     async function load() {
       refreshButton.disabled = true;
       message.innerHTML = '';
@@ -545,6 +582,11 @@ def dashboard_response() -> HTMLResponse:
     }
 
     document.addEventListener('click', event => {
+      const audioButton = event.target.closest('button[data-live-audio]');
+      if (audioButton) {
+        toggleLiveAudio(audioButton.dataset.camera, audioButton);
+        return;
+      }
       const modeButton = event.target.closest('button[data-live-mode]');
       if (modeButton) {
         switchLiveMode(modeButton.dataset.camera, modeButton.dataset.liveMode);
