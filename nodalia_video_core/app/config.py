@@ -16,7 +16,6 @@ OPTIONS_PATH = Path("/data/options.json")
 LOCAL_OPTIONS_PATH = Path("options.json")
 YAML_CONFIG_PATHS = (
     Path("/config/nodalia_video_core.yaml"),
-    Path("/addon_config/nodalia_video_core.yaml"),
 )
 
 
