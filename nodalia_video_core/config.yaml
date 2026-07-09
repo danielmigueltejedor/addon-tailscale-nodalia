@@ -1,5 +1,5 @@
 name: Nodalia Video Core
-version: 0.2.0
+version: 0.2.1
 slug: nodalia_video_core
 description: Stable local video bridge for Home Assistant cameras
 url: https://github.com/danielmigueltejedor/apps-nodalia
@@ -7,9 +7,7 @@ startup: services
 init: false
 host_network: true
 panel_icon: mdi:cctv
-ingress: true
-ingress_port: 8099
-ingress_stream: true
+webui: http://[HOST]:[PORT:8099]/
 arch:
   - aarch64
   - amd64

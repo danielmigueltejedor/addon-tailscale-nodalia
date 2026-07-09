@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 - 2026-07-09
+
+### Fixed
+
+- Use a direct Home Assistant web UI link instead of ingress for broader Supervisor compatibility.
+
 ## 0.2.0 - 2026-07-09
 
 ### Added
