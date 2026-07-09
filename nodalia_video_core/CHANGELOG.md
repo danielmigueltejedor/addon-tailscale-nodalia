@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 - 2026-07-09
+
+### Fixed
+
+- Prefer native HLS playback in the dashboard so Safari/Home Assistant can load live video without relying on MSE.
+- Keep the go2rtc player as an automatic fallback if native playback does not start.
+
 ## 0.3.0 - 2026-07-09
 
 ### Added

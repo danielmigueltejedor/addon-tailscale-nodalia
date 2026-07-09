@@ -174,6 +174,18 @@ def dashboard_response() -> HTMLResponse:
       background: #000;
     }
 
+    .live video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      object-fit: contain;
+    }
+
+    .live-fallback {
+      display: none;
+    }
+
     .camera-head {
       display: flex;
       align-items: flex-start;
@@ -332,7 +344,7 @@ def dashboard_response() -> HTMLResponse:
     function streamLinks(camera) {
       const urls = camera.urls || {};
       return Object.entries(urls).map(([kind, url]) => {
-        const safeUrl = escapeHtml(url);
+        const safeUrl = escapeHtml(url.replace('http://127.0.0.1:1984/', './go2rtc/'));
         return `<a class="button secondary" href="${safeUrl}" target="_blank" rel="noreferrer">${escapeHtml(kind.toUpperCase())}</a>`;
       }).join('');
     }
@@ -340,10 +352,13 @@ def dashboard_response() -> HTMLResponse:
     function cameraCard(camera) {
       const state = text(camera.state, 'unknown');
       const cameraId = escapeHtml(camera.id);
-      const liveSrc = `./go2rtc/stream.html?src=${encodeURIComponent(camera.id)}&mode=webrtc,mse,hls,mjpeg`;
+      const streamId = encodeURIComponent(camera.id);
+      const hlsSrc = `./go2rtc/api/stream.m3u8?src=${streamId}&mp4`;
+      const fallbackSrc = `./go2rtc/stream.html?src=${streamId}&mode=hls,mjpeg,webrtc,mse`;
       return `<article class="camera">
         <div class="live">
-          <iframe title="${escapeHtml(camera.name)} live" src="${liveSrc}" allow="autoplay; fullscreen; microphone"></iframe>
+          <video class="native-live" data-camera="${cameraId}" data-fallback="${fallbackSrc}" controls autoplay muted playsinline preload="auto" src="${hlsSrc}"></video>
+          <iframe class="live-fallback" title="${escapeHtml(camera.name)} live" allow="autoplay; fullscreen; microphone"></iframe>
         </div>
         <div class="camera-head">
           <div>
@@ -382,6 +397,27 @@ def dashboard_response() -> HTMLResponse:
       await load();
     }
 
+    function armLiveFallbacks() {
+      document.querySelectorAll('video.native-live').forEach(video => {
+        if (video.dataset.fallbackArmed === 'true') return;
+        video.dataset.fallbackArmed = 'true';
+        const showFallback = () => {
+          if (video.readyState >= 2) return;
+          const fallback = video.parentElement.querySelector('iframe.live-fallback');
+          if (!fallback) return;
+          fallback.src = video.dataset.fallback;
+          fallback.style.display = 'block';
+          video.style.display = 'none';
+        };
+        video.addEventListener('error', showFallback, { once: true });
+        setTimeout(showFallback, 8000);
+        video.play().catch(() => {
+          video.muted = true;
+          video.play().catch(() => {});
+        });
+      });
+    }
+
     async function load() {
       refreshButton.disabled = true;
       message.innerHTML = '';
@@ -414,6 +450,7 @@ def dashboard_response() -> HTMLResponse:
         } else if (cameraGrid.dataset.signature !== cameras.map(camera => camera.id).join('|')) {
           cameraGrid.innerHTML = cameras.map(cameraCard).join('');
           cameraGrid.dataset.signature = cameras.map(camera => camera.id).join('|');
+          armLiveFallbacks();
         }
       } catch (error) {
         message.innerHTML = `<div class="error">Unable to load status: ${escapeHtml(error.message)}</div>`;
