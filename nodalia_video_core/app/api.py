@@ -14,7 +14,7 @@ from .watchdog import Watchdog
 
 
 def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
-    app = FastAPI(title="Nodalia Video Core", version="0.3.3")
+    app = FastAPI(title="Nodalia Video Core", version="0.3.4")
 
     @app.get("/")
     async def dashboard():

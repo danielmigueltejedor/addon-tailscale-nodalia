@@ -47,7 +47,7 @@ class Watchdog:
         if camera_id not in self.config.cameras:
             raise KeyError(camera_id)
         health = self.cameras[camera_id]
-        await self._reconnect(camera_id, health, hard=hard)
+        await self._reconnect(camera_id, health, hard=hard, force=True)
         return health
 
     async def _camera_loop(self, camera_id: str) -> None:
@@ -97,6 +97,13 @@ class Watchdog:
                 camera_id,
                 probe.error or "no video stream detected",
             )
+            if self._is_local_stream_missing(probe):
+                LOGGER.warning(
+                    "[%s] Local go2rtc stream is missing; forcing go2rtc restart",
+                    camera_id,
+                )
+                await self._reconnect(camera_id, health, hard=True, force=True)
+                return
         if probe.audio_detected:
             LOGGER.info("[%s] Audio OK: %s", camera_id, probe.audio_codec or "unknown")
         elif probe.video_detected and camera.audio.enabled and camera.audio.expected:
@@ -204,15 +211,28 @@ class Watchdog:
             return round(fps, 2)
         return None
 
-    async def _reconnect(self, camera_id: str, health: CameraHealth, hard: bool = False) -> None:
+    def _is_local_stream_missing(self, probe: ProbeResult) -> bool:
+        error = probe.error or ""
+        return "127.0.0.1:8554" in error and "404 Not Found" in error
+
+    async def _reconnect(
+        self,
+        camera_id: str,
+        health: CameraHealth,
+        hard: bool = False,
+        force: bool = False,
+    ) -> None:
         camera = self.config.cameras[camera_id]
         now = datetime.now(timezone.utc)
-        if health.last_reconnect:
+        if force:
+            health.reconnect_count = 0
+
+        if health.last_reconnect and not force:
             elapsed = (now - health.last_reconnect).total_seconds()
             if elapsed < camera.health.reconnect_cooldown:
                 return
 
-        if health.reconnect_count >= camera.health.max_reconnect_attempts:
+        if health.reconnect_count >= camera.health.max_reconnect_attempts and not force:
             health.state = CameraState.OFFLINE
             health.last_error = (
                 f"Exceeded max reconnect attempts ({camera.health.max_reconnect_attempts})"

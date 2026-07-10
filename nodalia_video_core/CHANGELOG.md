@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4 - 2026-07-10
+
+### Fixed
+
+- Force go2rtc restart when the local re-emitted RTSP stream returns 404.
+- Allow manual reconnect/restart actions to bypass an exhausted reconnect counter.
+
 ## 0.3.3 - 2026-07-09
 
 ### Fixed
