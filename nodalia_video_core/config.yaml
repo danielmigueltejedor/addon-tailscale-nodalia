@@ -1,5 +1,5 @@
 name: Nodalia Video Core
-version: 0.3.4
+version: 0.3.5
 slug: nodalia_video_core
 description: Stable local video bridge for Home Assistant cameras
 url: https://github.com/danielmigueltejedor/apps-nodalia

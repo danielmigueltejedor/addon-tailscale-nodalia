@@ -27,6 +27,7 @@ class Go2RTCManager:
         self.binary = binary
         self.process: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
+        self.generation = 0
 
     def build_config(self) -> dict[str, Any]:
         streams: dict[str, list[str]] = {}
@@ -62,6 +63,7 @@ class Go2RTCManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
+            self.generation += 1
             asyncio.create_task(self._log_output(self.process))
 
     async def stop(self) -> None:
@@ -89,6 +91,7 @@ class Go2RTCManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
+            self.generation += 1
             asyncio.create_task(self._log_output(self.process))
 
     async def _stop_locked(self) -> None:
@@ -106,6 +109,7 @@ class Go2RTCManager:
         if self.process and self.process.returncode is None:
             try:
                 self.process.send_signal(signal.SIGHUP)
+                self.generation += 1
                 LOGGER.info("Sent SIGHUP to go2rtc")
                 return
             except ProcessLookupError:
@@ -115,15 +119,15 @@ class Go2RTCManager:
     async def soft_reconnect(self, camera_id: str) -> bool:
         LOGGER.warning("[%s] Soft reconnect requested", camera_id)
         urls = [
-            f"{self.config.go2rtc_api}/api/streams?src={camera_id}",
             f"{self.config.go2rtc_api}/api/streams?dst={camera_id}",
+            f"{self.config.go2rtc_api}/api/streams?src={camera_id}",
         ]
         async with httpx.AsyncClient(timeout=5) as client:
             for url in urls:
                 try:
                     response = await client.delete(url)
                     if response.status_code < 500:
-                        return True
+                        LOGGER.debug("[%s] Cleared go2rtc stream endpoint: %s", camera_id, url)
                 except httpx.HTTPError as exc:
                     LOGGER.debug("[%s] go2rtc soft reconnect endpoint failed: %s", camera_id, exc)
         await self.reload()

@@ -378,6 +378,10 @@ def dashboard_response() -> HTMLResponse:
       }).join('');
     }
 
+    function cacheBust(url) {
+      return `${url}${url.includes('?') ? '&' : '?'}nvc=${Date.now()}`;
+    }
+
     function cameraCard(camera) {
       const state = text(camera.state, 'unknown');
       const cameraId = escapeHtml(camera.id);
@@ -388,7 +392,7 @@ def dashboard_response() -> HTMLResponse:
       const snapshotSrc = `./go2rtc/api/frame.jpeg?src=${streamId}`;
       return `<article class="camera">
         <div class="live">
-          <video class="native-live" data-camera="${cameraId}" data-hls-video="${hlsVideoSrc}" data-hls-av="${hlsAvSrc}" data-player="${playerSrc}" data-snapshot="${snapshotSrc}" controls autoplay muted playsinline preload="auto" src="${hlsVideoSrc}"></video>
+          <video class="native-live" data-camera="${cameraId}" data-current-base="${hlsVideoSrc}" data-hls-video="${hlsVideoSrc}" data-hls-av="${hlsAvSrc}" data-player="${playerSrc}" data-snapshot="${snapshotSrc}" controls autoplay muted playsinline preload="auto" src="${cacheBust(hlsVideoSrc)}"></video>
           <video class="live-audio" data-camera="${cameraId}" playsinline preload="none"></video>
           <iframe class="live-fallback" title="${escapeHtml(camera.name)} live" allow="autoplay; fullscreen; microphone"></iframe>
           <img class="snapshot-live" alt="${escapeHtml(camera.name)} snapshot">
@@ -437,23 +441,73 @@ def dashboard_response() -> HTMLResponse:
       await load();
     }
 
+    function playLiveVideo(video) {
+      video.play().catch(() => {
+        video.muted = true;
+        video.play().catch(() => {});
+      });
+    }
+
+    function setLiveSource(video, base) {
+      video.dataset.currentBase = base;
+      video.setAttribute('src', cacheBust(base));
+      video.load();
+    }
+
+    function reloadLiveVideo(video) {
+      if (video.style.display === 'none') return;
+      const now = Date.now();
+      const lastReload = Number(video.dataset.lastReload || 0);
+      if (now - lastReload < 8000) return;
+      video.dataset.lastReload = String(now);
+      setLiveSource(video, video.dataset.currentBase || video.dataset.hlsVideo);
+      playLiveVideo(video);
+    }
+
+    function cleanupLiveElements() {
+      document.querySelectorAll('img.snapshot-live').forEach(stopSnapshot);
+      document.querySelectorAll('video.native-live').forEach(video => {
+        if (video.dataset.healthTimer) {
+          clearInterval(Number(video.dataset.healthTimer));
+          delete video.dataset.healthTimer;
+        }
+      });
+    }
+
     function armLiveFallbacks() {
       document.querySelectorAll('video.native-live').forEach(video => {
         if (video.dataset.fallbackArmed === 'true') return;
         video.dataset.fallbackArmed = 'true';
-        const showFallback = () => {
+        video.dataset.lastProgress = String(Date.now());
+        const recoverOrFallback = () => {
           if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) return;
-          switchLiveMode(video.dataset.camera, 'snapshot');
+          reloadLiveVideo(video);
+          setTimeout(() => {
+            if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) return;
+            switchLiveMode(video.dataset.camera, 'snapshot');
+          }, 10000);
         };
-        video.addEventListener('error', showFallback, { once: true });
-        setTimeout(showFallback, 8000);
+        video.addEventListener('error', recoverOrFallback);
+        video.addEventListener('stalled', recoverOrFallback);
+        video.addEventListener('waiting', recoverOrFallback);
+        setTimeout(recoverOrFallback, 8000);
         video.addEventListener('loadedmetadata', () => {
-          setTimeout(showFallback, 2500);
+          setTimeout(recoverOrFallback, 2500);
         }, { once: true });
-        video.play().catch(() => {
-          video.muted = true;
-          video.play().catch(() => {});
+        video.addEventListener('playing', () => {
+          video.dataset.lastProgress = String(Date.now());
         });
+        video.addEventListener('timeupdate', () => {
+          video.dataset.lastProgress = String(Date.now());
+        });
+        video.dataset.healthTimer = String(setInterval(() => {
+          if (video.style.display === 'none') return;
+          const lastProgress = Number(video.dataset.lastProgress || 0);
+          if (Date.now() - lastProgress > 20000) {
+            reloadLiveVideo(video);
+          }
+        }, 5000));
+        playLiveVideo(video);
       });
     }
 
@@ -501,16 +555,10 @@ def dashboard_response() -> HTMLResponse:
       }
 
       fallback.removeAttribute('src');
-      const nextSrc = mode === 'hls-av' ? video.dataset.hlsAv : video.dataset.hlsVideo;
-      if (video.getAttribute('src') !== nextSrc) {
-        video.setAttribute('src', nextSrc);
-        video.load();
-      }
+      const nextBase = mode === 'hls-av' ? video.dataset.hlsAv : video.dataset.hlsVideo;
+      setLiveSource(video, nextBase);
       video.style.display = 'block';
-      video.play().catch(() => {
-        video.muted = true;
-        video.play().catch(() => {});
-      });
+      playLiveVideo(video);
     }
 
     function toggleLiveAudio(cameraId, button) {
@@ -528,7 +576,7 @@ def dashboard_response() -> HTMLResponse:
         return;
       }
 
-      audio.src = video.dataset.hlsAv;
+      audio.src = cacheBust(video.dataset.hlsAv);
       audio.muted = false;
       audio.volume = 1;
       audio.dataset.enabled = 'true';
@@ -565,13 +613,18 @@ def dashboard_response() -> HTMLResponse:
           ? `${cameras.length} configured camera${cameras.length === 1 ? '' : 's'}`
           : 'No cameras configured';
 
+        const go2rtcGeneration = health.go2rtc_generation ?? 0;
+        const cameraSignature = `${go2rtcGeneration}:${cameras.map(camera => camera.id).join('|')}`;
+
         if (!cameras.length) {
+          cleanupLiveElements();
           cameraGrid.innerHTML = '';
           message.innerHTML = '<div class="empty">No cameras configured.</div>';
           cameraGrid.dataset.signature = '';
-        } else if (cameraGrid.dataset.signature !== cameras.map(camera => camera.id).join('|')) {
+        } else if (cameraGrid.dataset.signature !== cameraSignature) {
+          cleanupLiveElements();
           cameraGrid.innerHTML = cameras.map(cameraCard).join('');
-          cameraGrid.dataset.signature = cameras.map(camera => camera.id).join('|');
+          cameraGrid.dataset.signature = cameraSignature;
           armLiveFallbacks();
         }
       } catch (error) {

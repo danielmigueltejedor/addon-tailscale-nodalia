@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.5 - 2026-07-10
+
+### Fixed
+
+- Refresh dashboard HLS sessions when go2rtc restarts or a stream is reconnected.
+- Reload stale native HLS playback with a cache-busted stream URL before falling back to snapshots.
+- Reload the go2rtc config after soft reconnects so configured streams are restored immediately.
+- Handle interrupted go2rtc proxy streams without noisy request tracebacks.
+
 ## 0.3.4 - 2026-07-10
 
 ### Fixed

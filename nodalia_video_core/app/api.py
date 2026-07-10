@@ -1,20 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import httpx
 import websockets
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
 
 from .go2rtc import Go2RTCManager
 from .ui import dashboard_response
 from .watchdog import Watchdog
 
+LOGGER = logging.getLogger("nodalia_video_core.api")
+
 
 def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
-    app = FastAPI(title="Nodalia Video Core", version="0.3.4")
+    app = FastAPI(title="Nodalia Video Core", version="0.3.5")
 
     @app.get("/")
     async def dashboard():
@@ -31,6 +33,7 @@ def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
         return {
             "ok": len(unhealthy) == 0,
             "go2rtc": await go2rtc.is_responding(),
+            "go2rtc_generation": go2rtc.generation,
             "camera_count": len(cameras),
             "unhealthy_count": len(unhealthy),
         }
@@ -71,11 +74,22 @@ def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
 
         client = httpx.AsyncClient(timeout=None)
         upstream_request = client.build_request("GET", target)
-        response = await client.send(upstream_request, stream=True)
-
-        async def close_upstream() -> None:
-            await response.aclose()
+        try:
+            response = await client.send(upstream_request, stream=True)
+        except httpx.HTTPError as exc:
             await client.aclose()
+            LOGGER.warning("go2rtc proxy request failed for %s: %s", target, exc)
+            raise HTTPException(status_code=502, detail="go2rtc proxy request failed") from exc
+
+        async def stream_upstream():
+            try:
+                async for chunk in response.aiter_raw():
+                    yield chunk
+            except httpx.HTTPError as exc:
+                LOGGER.debug("go2rtc proxy stream ended for %s: %s", target, exc)
+            finally:
+                await response.aclose()
+                await client.aclose()
 
         headers = {
             key: value
@@ -83,10 +97,9 @@ def create_app(watchdog: Watchdog, go2rtc: Go2RTCManager) -> FastAPI:
             if key.lower() not in {"content-encoding", "content-length", "transfer-encoding"}
         }
         return StreamingResponse(
-            response.aiter_raw(),
+            stream_upstream(),
             status_code=response.status_code,
             headers=headers,
-            background=BackgroundTask(close_upstream),
         )
 
     @app.websocket("/go2rtc/api/ws")
