@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.12.0 - 2026-08-05
+### Changed
+- Bump Tailscale: 1.102.1 → 1.102.2
+- Add-on version: 3.11.0 → 3.12.0
+- Update onboarding UI build version to 3.12.0
 ## 3.11.0 - 2026-08-04
 ### Changed
 - Bump Tailscale: 1.98.10 → 1.102.1
